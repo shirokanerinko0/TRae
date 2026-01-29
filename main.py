@@ -10,21 +10,25 @@ from src.api.github_api import GitHubAPI
 from src.extractor.data_extractor import DataExtractor
 from src.preprocessor.data_preprocessor import DataPreprocessor
 
+# 全局配置变量
+CONFIG = None
+
 
 def main():
     """
     主函数，整合各层功能模块
     """
+    global CONFIG
     # 从配置文件加载配置
-    config = load_config()
-    if not config:
+    CONFIG = load_config()
+    if not CONFIG:
         print("无法加载配置文件，请检查config.json文件是否存在且格式正确")
         return
     
     # 从配置中获取信息
-    access_token = config.get("token")
-    repo_owner = config.get("owner")
-    repo_name = config.get("repo")
+    access_token = CONFIG.get("token")
+    repo_owner = CONFIG.get("owner")
+    repo_name = CONFIG.get("repo")
     
     # 验证配置信息
     if not all([access_token, repo_owner, repo_name]):
@@ -34,7 +38,9 @@ def main():
     print(f"从配置文件加载信息成功: {repo_owner}/{repo_name}")
     
     # 初始化各层实例
+    # GitHubAPI会从配置文件中读取debug值
     github_api = GitHubAPI(access_token)
+    # DataExtractor会从配置文件中读取limits值
     extractor = DataExtractor()
     preprocessor = DataPreprocessor()
     
@@ -103,6 +109,12 @@ def main():
     # 保存文件数据
     save_data(files, f"{data_dir}/files_raw.json")
     save_data(source_files, f"{data_dir}/files_source.json")
+    
+    # 按原仓库结构保存源代码文件
+    print("\n开始保存源代码文件到origin_src目录...")
+    origin_src_dir = f"{data_dir}/origin_src"
+    saved_count = extractor.save_source_files(repo, origin_src_dir)
+    print(f"成功保存 {saved_count} 个源代码文件到 {origin_src_dir}")
     
     # 打印部分源代码文件路径
     print("\n部分源代码文件路径:")

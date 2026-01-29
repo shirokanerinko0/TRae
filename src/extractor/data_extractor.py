@@ -7,22 +7,46 @@
 
 import os
 
+# 尝试从main.py导入全局配置变量
+try:
+    from main import CONFIG
+except ImportError:
+    CONFIG = None
+
 
 class DataExtractor:
     """
     数据抽取与解析类，提供从GitHub API返回的数据中抽取信息的方法
     """
     
-    def __init__(self):
+    def __init__(self, limits=None):
         """
         初始化DataExtractor实例
+        :param limits: 限制配置字典，包含max_commits等配置项
         """
         # 定义源代码文件扩展名
-        self.source_code_extensions = {
-            '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.js', '.ts', '.jsx', '.tsx',
-            '.html', '.css', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
-            '.sql', '.sh', '.md', '.txt'
+        if CONFIG and "source_code_extensions" in CONFIG:
+            self.source_code_extensions = CONFIG["source_code_extensions"]
+        else:
+            self.source_code_extensions = {
+                '.py', '.java', '.c', '.cpp'
+            }
+        print(f"源代码文件扩展名: {self.source_code_extensions}")
+        # 设置默认限制
+        self.limits = {
+            'max_commits': 1000,
+            'max_issues': 1000,
+            'max_pull_requests': 1000,
+            'max_files': 1000
         }
+        
+        # 首先使用配置文件中的limits值
+        if CONFIG and "limits" in CONFIG:
+            self.limits.update(CONFIG["limits"])
+        
+        # 如果提供了limits参数，更新默认值
+        if limits:
+            self.limits.update(limits)
     
     def extract_issues(self, issues):
         """
@@ -60,7 +84,7 @@ class DataExtractor:
         """
         commits_list = []
         count = 0
-        max_commits = 1000  # 限制最多获取1000个Commits
+        max_commits = self.limits.get('max_commits', 1000)  # 从限制配置中获取
         
         for commit in commits:
             try:
@@ -98,7 +122,7 @@ class DataExtractor:
                 commits_list.append(commit_data)
                 count += 1
             except Exception as item_error:
-                print(f"处理Commit {commit.sha[:7]} 时出错: {str(item_error)}")
+                print(f"处理Commit {commit.sha} 时出错: {str(item_error)}")
                 import traceback
                 traceback.print_exc()
                 continue
@@ -146,8 +170,8 @@ class DataExtractor:
         :return: 文件列表
         """
         try:
-            from src.api.github_api import GitHubAPI
-            api = GitHubAPI("dummy_token")  # 仅用于调用方法，不需要实际认证
+            from src.api.github_api import GitHubAPI, DEBUG
+            api = GitHubAPI("dummy_token", debug=DEBUG)  # 仅用于调用方法，不需要实际认证
             contents = api.get_contents(repo, path)
             files_list = []
             
@@ -194,3 +218,75 @@ class DataExtractor:
         """
         _, ext = os.path.splitext(file_path)
         return ext in self.source_code_extensions
+    
+    def save_source_files(self, repo, target_dir):
+        """
+        按原仓库结构保存源代码文件
+        :param repo: 仓库对象
+        :param target_dir: 目标保存目录
+        :return: 保存的文件数量
+        """
+        try:
+            from src.api.github_api import GitHubAPI
+            api = GitHubAPI("dummy_token")  # 仅用于调用方法，不需要实际认证
+            
+            # 确保目标目录存在
+            os.makedirs(target_dir, exist_ok=True)
+            
+            # 递归保存文件
+            saved_count = self._save_files_recursive(repo, api, ".", target_dir)
+            
+            return saved_count
+        except Exception as e:
+            print(f"保存源代码文件失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return 0
+    
+    def _save_files_recursive(self, repo, api, repo_path, target_dir):
+        """
+        递归保存文件的辅助方法
+        :param repo: 仓库对象
+        :param api: GitHubAPI实例
+        :param repo_path: 仓库中的当前路径
+        :param target_dir: 目标保存目录
+        :return: 保存的文件数量
+        """
+        saved_count = 0
+        
+        try:
+            contents = api.get_contents(repo, repo_path)
+            
+            for content in contents:
+                if content.type == "dir":
+                    # 递归处理子目录
+                    sub_target_dir = os.path.join(target_dir, content.name)
+                    os.makedirs(sub_target_dir, exist_ok=True)
+                    saved_count += self._save_files_recursive(repo, api, content.path, sub_target_dir)
+                else:
+                    # 检查是否为源代码文件
+                    if self.is_source_file(content.path):
+                        try:
+                            # 获取文件内容
+                            file_content = api.get_file_content(repo, content.path)
+                            if file_content is not None:
+                                # 构建目标文件路径
+                                target_file_path = os.path.join(target_dir, content.name)
+                                
+                                # 保存文件内容
+                                with open(target_file_path, 'w', encoding='utf-8', errors='replace') as f:
+                                    f.write(file_content)
+                                
+                                saved_count += 1
+                                # 每保存10个文件打印一次进度
+                                if saved_count % 10 == 0:
+                                    print(f"  已保存 {saved_count} 个源代码文件...")
+                        except Exception as e:
+                            print(f"  保存文件 {content.path} 失败: {str(e)}")
+                            continue
+        except Exception as e:
+            print(f"  处理目录 {repo_path} 失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        return saved_count
