@@ -6,6 +6,7 @@ GitHub API访问层，负责与GitHub API的交互
 """
 
 from github import Github
+from src.utils.utils import load_config
 import github.Auth
 import json
 import os
@@ -13,10 +14,7 @@ import logging
 from datetime import datetime
 
 # 尝试从main.py导入全局配置变量
-try:
-    from main import CONFIG
-except ImportError:
-    CONFIG = None
+CONFIG = load_config()
 
 # 全局DEBUG变量，用于控制debug模式
 DEBUG = True
@@ -27,7 +25,7 @@ class GitHubAPI:
     GitHub API访问类，提供与GitHub API交互的方法
     """
     
-    def __init__(self, access_token, debug=None, log_dir="logs"):
+    def __init__(self, access_token=CONFIG["token"], debug=None, log_dir="logs"):
         """
         初始化GitHubAPI实例
         :param access_token: GitHub个人访问令牌
@@ -156,11 +154,11 @@ class GitHubAPI:
                         "number": issue.number,
                         "title": issue.title,
                         "state": issue.state,
+                        "events_url": issue.events_url,
                         "created_at": issue.created_at.isoformat() if issue.created_at else None,
                         "user": issue.user.login if issue.user else None,
                         "labels": [label.name for label in issue.labels]
                     })
-                    print(issue)
                 if len(issues_list) > 10:
                     issues_data.append({"message": f"... 等 {len(issues_list) - 10} 个issues"})
                 self._log_api_response(api_url, issues_data)

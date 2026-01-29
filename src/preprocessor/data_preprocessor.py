@@ -41,6 +41,7 @@ class DataPreprocessor:
         """
         初始化DataPreprocessor实例
         """
+        ## 初始化停用词列表
         self.stop_words = set(stopwords.words('english'))
     
     def preprocess_text(self, text):
@@ -56,8 +57,7 @@ class DataPreprocessor:
         # 去除链接
         text = re.sub(r'http\S+', '', text)
         text = re.sub(r'https\S+', '', text)
-        # 去除特殊符号，保留字母、数字和空格
-        text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+
         
         # 2. 转换为小写
         text = text.lower()

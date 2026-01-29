@@ -98,17 +98,6 @@ def main():
     save_data(processed_prs, f"{data_dir}/pull_requests_processed.json")
     
     # 4. 采集文件数据
-    print("\n开始采集文件数据...")
-    files = extractor.extract_files(repo)
-    print(f"采集到 {len(files)} 个文件")
-    
-    # 过滤源代码文件
-    source_files = extractor.filter_source_files(files)
-    print(f"过滤后得到 {len(source_files)} 个源代码文件")
-    
-    # 保存文件数据
-    save_data(files, f"{data_dir}/files_raw.json")
-    save_data(source_files, f"{data_dir}/files_source.json")
     
     # 按原仓库结构保存源代码文件
     print("\n开始保存源代码文件到origin_src目录...")
@@ -116,13 +105,6 @@ def main():
     saved_count = extractor.save_source_files(repo, origin_src_dir)
     print(f"成功保存 {saved_count} 个源代码文件到 {origin_src_dir}")
     
-    # 打印部分源代码文件路径
-    print("\n部分源代码文件路径:")
-    for file in source_files[:10]:  # 只打印前10个
-        print(f"- {file['path']}")
-    
-    if len(source_files) > 10:
-        print(f"... 等 {len(source_files) - 10} 个文件")
     
     print("\n数据采集、预处理和保存完成！")
 

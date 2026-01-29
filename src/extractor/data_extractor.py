@@ -63,6 +63,7 @@ class DataExtractor:
                     "title": issue.title or "",
                     "body": issue.body or "",
                     "state": issue.state,
+                    "events_url": issue.events_url,
                     "created_at": issue.created_at,
                     "updated_at": issue.updated_at,
                     "labels": [label.name for label in issue.labels],
@@ -170,8 +171,8 @@ class DataExtractor:
         :return: 文件列表
         """
         try:
-            from src.api.github_api import GitHubAPI, DEBUG
-            api = GitHubAPI("dummy_token", debug=DEBUG)  # 仅用于调用方法，不需要实际认证
+            from src.api.github_api import GitHubAPI
+            api = GitHubAPI("dummy_token")  # 仅用于调用方法，不需要实际认证
             contents = api.get_contents(repo, path)
             files_list = []
             
