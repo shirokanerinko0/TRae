@@ -1,0 +1,18 @@
+{
+  "token": "ghp_1234",
+  "owner": "shirokanerinko0",
+  "repo": "tesnb",
+  "debug": false,
+  "limits": {
+    "max_commits": 1000,
+    "max_issues": 1000,
+    "max_pull_requests": 1000,
+    "max_files": 1000
+  },
+  "source_code_extensions": [
+    ".py",
+    ".java",
+    ".c",
+    ".cpp"
+  ]
+}
