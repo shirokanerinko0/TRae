@@ -76,19 +76,19 @@ class JavaCodeAnalyzer:
         """
         处理单个类节点
         """
-        # 获取类名 (使用 field 'name')
+        # 1. 获取类名 (使用 field 'name')
         name_node = class_node.child_by_field_name('name')
         class_name = self._get_text(name_node)
         if not class_name: return None
 
-        # 获取修饰符 (查找 modifiers 类型的子节点)
+        # 2. 获取修饰符 (查找 modifiers 类型的子节点)
         modifiers = []
         modifiers_node = class_node.child_by_field_name('modifiers')
         if modifiers_node:
             for mod in modifiers_node.children:
                 modifiers.append(self._get_text(mod))
 
-        # 提取注解
+        # 5. 提取注解
         annotations = []
         # 遍历 class_node 的所有子节点
         for child in class_node.children:
@@ -105,7 +105,7 @@ class JavaCodeAnalyzer:
                 if child.type in ['marker_annotation', 'annotation']:
                     annotations.append(self._get_text(child))
 
-        # 提取类继承关系和接口实现关系
+        # 6. 提取类继承关系和接口实现关系
         extends = []
         implements = []
         
@@ -143,7 +143,7 @@ class JavaCodeAnalyzer:
             "original_code": self._get_text(class_node)
         }
 
-        # 处理类体 (class_body)
+        # 3. 处理类体 (class_body)
         body_node = class_node.child_by_field_name('body')
         if body_node:
             for member in body_node.children:
@@ -167,11 +167,11 @@ class JavaCodeAnalyzer:
         """
         处理方法或构造函数节点
         """
-        # 获取方法名
+        # 1. 方法名
         name_node = method_node.child_by_field_name('name')
         method_name = self._get_text(name_node)
 
-        # 返回类型 (构造函数没有返回类型)
+        # 2. 返回类型 (构造函数没有返回类型)
         return_type = "void"
         if not is_constructor:
             type_node = method_node.child_by_field_name('type')
@@ -184,14 +184,14 @@ class JavaCodeAnalyzer:
                         return_type = "void"
                         break
 
-        # 获取修饰符
+        # 3. 修饰符
         modifiers = []
         modifiers_node = method_node.child_by_field_name('modifiers')
         if modifiers_node:
             for mod in modifiers_node.children:
                 modifiers.append(self._get_text(mod))
 
-        # 参数提取
+        # 4. 参数提取
         parameters = []
         params_node = method_node.child_by_field_name('parameters')
         if params_node:
@@ -210,13 +210,13 @@ class JavaCodeAnalyzer:
                     
                     parameters.append({"type": p_type, "name": p_name})
 
-        # 注释提取 (Looking backwards)
+        # 5. 注释提取 (Looking backwards)
         comment = self._get_comments(method_node)
 
-        # 收集方法调用
+        # 6. 收集方法调用
         called_functions = self._collect_invocations(method_node)
 
-        # 提取注解
+        # 5. 提取注解
         annotations = []
         # 遍历 method_node 的所有子节点
         for child in method_node.children:
