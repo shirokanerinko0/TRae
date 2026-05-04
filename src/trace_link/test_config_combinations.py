@@ -102,5 +102,11 @@ def main():
         restore_original_config(original_config)
         print("\n已恢复原始配置")
 
+    print("\n" + "=" * 80)
+    print("运行分析程序...")
+    print("=" * 80)
+    from analyze_results import main as analyze_main
+    analyze_main()
+
 if __name__ == "__main__":
     main()

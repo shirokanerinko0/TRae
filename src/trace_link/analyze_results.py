@@ -33,32 +33,67 @@ class TraceLinkResultAnalyzer:
         return self.all_results
 
     def parse_filename(self, filename: str) -> Dict:
-        pattern = r"trace_link(.+?)_(.+?)_top(\d+)_(\d+)(?:_(.+?))?\.json"
-        match = re.match(pattern, filename)
+        pro_match = re.match(r"trace_linkPro_(.+?)_(.+?)_top(\d+)_(\d+)(?:_(.+?))?\.json", filename)
+        llm_no_pro_match = re.match(r"trace_link([a-zA-Z0-9_-]+?)_(jina_code|unixcoder|sbert|fastText)_top(\d+)_(\d+)(?:_(.+?))?\.json", filename)
+        normal_match = re.match(r"trace_link([a-zA-Z0-9_-]+?)_top(\d+)_(\d+)(?:_(.+?))?\.json", filename)
 
-        if match:
-            llm_model = match.group(1).replace("_", "/")
-            encoder = match.group(2)
-            top_k_min = int(match.group(3))
-            top_k_max = int(match.group(4))
-            snippet_types = match.group(5).split("_") if match.group(5) else []
-            has_llm = "Pro_" in filename or "deepseek" in filename.lower()
+        if pro_match:
+            llm_name = "Pro_" + pro_match.group(1).replace("_", "/")
+            encoder = pro_match.group(2)
+            top_k_min = int(pro_match.group(3))
+            top_k_max = int(pro_match.group(4))
+            snippet_types = pro_match.group(5).split("_") if pro_match.group(5) else []
             return {
-                'llm_model': llm_model if has_llm else None,
+                'llm_model': llm_name,
                 'encoder': encoder,
                 'top_k_range': f"{top_k_min}-{top_k_max}",
                 'top_k_min': top_k_min,
                 'top_k_max': top_k_max,
                 'snippet_types': snippet_types,
                 'snippet_types_str': "_".join(snippet_types) if snippet_types else "default",
-                'has_llm': has_llm,
-                'use_llm': "使用LLM" if has_llm else "未使用LLM"
+                'has_llm': True,
+                'use_llm': llm_name
+            }
+        elif llm_no_pro_match:
+            llm_name = llm_no_pro_match.group(1)
+            encoder = llm_no_pro_match.group(2)
+            top_k_min = int(llm_no_pro_match.group(3))
+            top_k_max = int(llm_no_pro_match.group(4))
+            snippet_types = llm_no_pro_match.group(5).split("_") if llm_no_pro_match.group(5) else []
+            return {
+                'llm_model': llm_name,
+                'encoder': encoder,
+                'top_k_range': f"{top_k_min}-{top_k_max}",
+                'top_k_min': top_k_min,
+                'top_k_max': top_k_max,
+                'snippet_types': snippet_types,
+                'snippet_types_str': "_".join(snippet_types) if snippet_types else "default",
+                'has_llm': True,
+                'use_llm': llm_name
+            }
+        elif normal_match:
+            encoder = normal_match.group(1)
+            top_k_min = int(normal_match.group(2))
+            top_k_max = int(normal_match.group(3))
+            snippet_types = normal_match.group(4).split("_") if normal_match.group(4) else []
+            return {
+                'llm_model': None,
+                'encoder': encoder,
+                'top_k_range': f"{top_k_min}-{top_k_max}",
+                'top_k_min': top_k_min,
+                'top_k_max': top_k_max,
+                'snippet_types': snippet_types,
+                'snippet_types_str': "_".join(snippet_types) if snippet_types else "default",
+                'has_llm': False,
+                'use_llm': "未使用LLM"
             }
         else:
             return {
                 'llm_model': None,
                 'encoder': 'unknown',
                 'top_k_range': 'unknown',
+                'top_k_min': 0,
+                'top_k_max': 0,
                 'snippet_types': [],
                 'snippet_types_str': 'unknown',
                 'has_llm': False,

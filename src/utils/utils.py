@@ -90,7 +90,7 @@ def get_trace_link_result_file_name():
     name = (
         'trace_link'
         +('_llm' if CONFIG['trace_link']['use_llm'] else '')
-        +(CONFIG['SiliconFlow']['model'].replace('/', '_') if CONFIG['requirement_processing']['use_llm_processing'] else '')
+        +(CONFIG[CONFIG['LLMProvider']]['model'].replace('/', '_') if CONFIG['requirement_processing']['use_llm_processing'] else '')
         +(f'_{encode_model_name}' if encode_model_name else '')
         +(f'_top{top_k_str}' if top_k else '')
         )
@@ -101,10 +101,12 @@ def get_trace_link_result_file_name():
     return name + '.json'
 
 def get_requirements_processed_file_name():
+    use_llm= CONFIG['requirement_processing']['use_llm_processing']
     name = (
     'requirements_processed'
-    + ('_llm_' if CONFIG['requirement_processing']['use_llm_processing'] else '')
-    + (CONFIG['SiliconFlow']['model'].replace('/', '_') if CONFIG['requirement_processing']['use_llm_processing'] else '')
+    + ('_llm_' if use_llm else '')
+    + (CONFIG[CONFIG['LLMProvider']]['model'].replace('/', '_') if use_llm else '')
+    + ('_'+CONFIG['requirement_processing']['prompt_name'] if use_llm else '')
     + '.json'
     )
     return name

@@ -9,10 +9,11 @@ from src.LLMapi.prompt import PROMPTS, get_prompt, get_best_prompt, list_prompts
 
 
 CONFIG = load_config()
+LLMProvider = CONFIG["LLMProvider"]
 
 # 从配置文件获取API密钥和基础URL
-API_KEY = CONFIG["SiliconFlow"]["API_Key"]
-BASE_URL = CONFIG["SiliconFlow"]["Base_URL"]  # 使用siliconflow的API地址
+API_KEY = CONFIG[LLMProvider]["API_Key"]
+BASE_URL = CONFIG[LLMProvider]["Base_URL"]  # 使用指定模型的API地址
 MAX_BODY_LEN = 4000
 
 # 获取当前使用的提示词配置
@@ -48,13 +49,13 @@ Output in JSON format:
     try:
         # 使用OpenAI客户端调用API
         response = client.chat.completions.create(
-            model=CONFIG["SiliconFlow"]["model"],  # 使用V2.5模型
+            model=CONFIG[LLMProvider]["model"],  # 使用指定模型
             messages=[
                 {"role": "system", "content": "You are a precise and concise software analysis assistant."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},  # 指定返回JSON格式
-            temperature=0.2,
+            temperature=CONFIG["LLMtemperature"],
             max_tokens=2048,
         )
 
@@ -97,13 +98,13 @@ def process_requirement_text_llm(title, body):
     try:
         # 使用OpenAI客户端调用API
         response = client.chat.completions.create(
-            model=CONFIG["SiliconFlow"]["model"],
+            model=CONFIG[LLMProvider]["model"],  # 使用指定模型
             messages=[
                 {"role": "system", "content": "You are a precise and concise software requirements analysis assistant."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2,
+            temperature=CONFIG["LLMtemperature"],
             max_tokens=4096,
         )
 
