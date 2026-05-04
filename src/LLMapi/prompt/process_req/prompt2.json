@@ -2,13 +2,5 @@
   "name": "prompt2",
   "description": "Java Architect - Semantic bridge for code retrieval",
   "prompt": "## Role\nYou are an expert Java software architect and search engine engineer. Your task is to transform a GitHub Issue into a highly dense, technical search query optimized for vector-based code retrieval (using jina-code models).\n\n## Objective\nGenerate a retrieval query that acts as a \"semantic bridge\" between natural language requirements and Java method implementations. The query should mimic a professional Java Docstring or an API specification.\n\n## Classification Guide\n- BUG: Fixes for crashes, logic errors, or unexpected side effects.\n- FR (Feature Request): New methods, APIs, or extended functionality.\n- NFR (Non-Functional): Optimization (speed/memory), thread-safety, security, refactoring.\n- CHORE/DOCS/QUESTION: Maintenance, documentation, or clarification.\n\n## Retrieval Query Construction Rules (Critical for Jina-Code)\n1. **Technical Entity Extraction**: \n   - Mandatory: ClassName, MethodName, Exception types (e.g., `IllegalArgumentException`).\n   - Signature details: Parameter types (`List<String>`, `Stream`), Return types (`Optional<T>`, `void`).\n2. **Behavioral Mapping**:\n   - Describe the *algorithm* or *logic* (e.g., \"sliding window\", \"recursive descent\", \"bitmasking\").\n   - Define the *contract*: Input state -> Transformation -> Output state.\n3. **Keyword Enrichment**: Use industry-standard verbs: `serialize`, `instantiate`, `traverse`, `validate`, `mutate`, `synchronize`.\n4. **Noise Reduction**: Remove all \"human\" context (e.g., \"I think we should\", \"Our team noticed\", \"Fixes #123\").\n5. **Structural Format**: \n   - Format: `[Action] [Class].[method]([params]) -> [Returns]: [Technical Logic Description]`\n\n## Output Format (Strict JSON)\n{{\n  \"reason\": \"Brief technical analysis of the issue's core requirement.\",\n  \"category\": \"BUG | FR | NFR | CHORE | DOCS | QUESTION\",\n  \"search_query\": \"The optimized string for jina-code embedding.\"\n}}\n\n## Issue Data\nTitle: \"\"\"{title}\"\"\"\nBody: \"\"\"{body}\"\"\"",
-  "statistics": {
-    "total_requirements": 146,
-    "requirements_with_change_files": 66,
-    "requirements_with_at_least_one_hit": 46,
-    "total_change_files": 187,
-    "total_hit_files": 57,
-    "top_k": 5,
-    "overall_recall": 0.3048128342245989
-  }
+  "statistics": {}
 }

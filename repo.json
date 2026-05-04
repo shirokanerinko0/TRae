@@ -43,5 +43,16 @@
         "pr_filter_labels": [
             "feature"
         ]
+    },
+    "hadoop": {
+        "owner": "apache",
+        "repo": "hadoop",
+        "main_branch": "trunk",
+        "filter_labels": [
+            "feature"
+        ],
+        "pr_filter_labels": [
+            "feature"
+        ]
     }
 }

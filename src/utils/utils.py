@@ -95,6 +95,7 @@ def get_trace_link_result_file_name():
         +(f'_top{top_k_str}' if top_k else '')
         )
     code_snippet_types = CONFIG.get("code_snippet", [])
+    code_snippet_types.sort()
     if code_snippet_types:
         name = name + "_" + "_".join(code_snippet_types)
     return name + '.json'

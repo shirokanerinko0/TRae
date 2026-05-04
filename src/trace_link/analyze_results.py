@@ -42,22 +42,27 @@ class TraceLinkResultAnalyzer:
             top_k_min = int(match.group(3))
             top_k_max = int(match.group(4))
             snippet_types = match.group(5).split("_") if match.group(5) else []
+            has_llm = "Pro_" in filename or "deepseek" in filename.lower()
             return {
-                'llm_model': llm_model,
+                'llm_model': llm_model if has_llm else None,
                 'encoder': encoder,
                 'top_k_range': f"{top_k_min}-{top_k_max}",
                 'top_k_min': top_k_min,
                 'top_k_max': top_k_max,
                 'snippet_types': snippet_types,
-                'snippet_types_str': "_".join(snippet_types) if snippet_types else "default"
+                'snippet_types_str': "_".join(snippet_types) if snippet_types else "default",
+                'has_llm': has_llm,
+                'use_llm': "使用LLM" if has_llm else "未使用LLM"
             }
         else:
             return {
-                'llm_model': 'unknown',
+                'llm_model': None,
                 'encoder': 'unknown',
                 'top_k_range': 'unknown',
                 'snippet_types': [],
-                'snippet_types_str': 'unknown'
+                'snippet_types_str': 'unknown',
+                'has_llm': False,
+                'use_llm': "未使用LLM"
             }
 
     def get_all_statistics(self) -> List[Dict]:
@@ -73,6 +78,8 @@ class TraceLinkResultAnalyzer:
                     'encoder': config['encoder'],
                     'snippet_types': config['snippet_types_str'],
                     'top_k': int(top_k),
+                    'has_llm': config.get('has_llm', False),
+                    'use_llm': config.get('use_llm', '未使用LLM'),
                     'total_requirements': stats.get('total_requirements', 0),
                     'requirements_with_change_files': stats.get('requirements_with_change_files', 0),
                     'requirements_with_at_least_one_hit': stats.get('requirements_with_at_least_one_hit', 0),
@@ -212,7 +219,48 @@ class TraceLinkResultAnalyzer:
         print("文件列表:")
         for i, f in enumerate(self.results_files, 1):
             config = self.parse_filename(f)
-            print(f"  {i}. {config['encoder']} | {config['snippet_types_str']}")
+            print(f"  {i}. {config['encoder']} | {config['snippet_types_str']} | {config['use_llm']}")
+
+        all_stats = self.get_all_statistics()
+        llm_files = [f for f in self.results_files if self.parse_filename(f).get('has_llm', False)]
+        non_llm_files = [f for f in self.results_files if not self.parse_filename(f).get('has_llm', False)]
+
+        print("\n" + "=" * 100)
+        print("按是否使用LLM分类统计")
+        print("=" * 100)
+        print(f"  使用LLM: {len(llm_files)} 个结果文件")
+        print(f"  未使用LLM: {len(non_llm_files)} 个结果文件")
+
+        print("\n" + "=" * 100)
+        print("使用LLM vs 未使用LLM 对比 (Top-10, 按F1排序)")
+        print("=" * 100)
+        for use_llm_label in ["使用LLM", "未使用LLM"]:
+            stats_filtered = [s for s in all_stats if s['top_k'] == 10 and s['use_llm'] == use_llm_label]
+            if not stats_filtered:
+                continue
+            llm_stats = defaultdict(list)
+            for s in stats_filtered:
+                key = (s['encoder'], s['snippet_types'])
+                llm_stats[key].append(s)
+            results = []
+            for (encoder, snippet), stat_list in llm_stats.items():
+                avg_f1 = sum(s['overall_f1'] for s in stat_list) / len(stat_list)
+                avg_recall = sum(s['overall_recall'] for s in stat_list) / len(stat_list)
+                avg_precision = sum(s['overall_precision'] for s in stat_list) / len(stat_list)
+                results.append({
+                    'encoder': encoder,
+                    'snippet_types': snippet,
+                    'overall_recall': round(avg_recall, 4),
+                    'overall_precision': round(avg_precision, 4),
+                    'overall_f1': round(avg_f1, 4)
+                })
+            results.sort(key=lambda x: x['overall_f1'], reverse=True)
+            print(f"\n--- {use_llm_label} ---")
+            header = f"{'Encoder':>15} | {'Snippet Types':>25} | {'Recall':>8} | {'Precision':>10} | {'F1':>8}"
+            print(header)
+            print("-" * 80)
+            for row in results[:10]:
+                print(f"{row['encoder']:>15} | {row['snippet_types']:>25} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f}")
 
         print("\n" + "=" * 100)
         print("Top-K 性能对比 (各配置平均)")
@@ -247,16 +295,15 @@ class TraceLinkResultAnalyzer:
         print("\n" + "=" * 100)
         print("各 Top-K 配置详细结果 (按F1排序)")
         print("=" * 100)
-        all_stats = self.get_all_statistics()
         for top_k in sorted(set(s['top_k'] for s in all_stats)):
             df_k = [s for s in all_stats if s['top_k'] == top_k]
             df_k.sort(key=lambda x: x['overall_f1'], reverse=True)
             print(f"\n--- Top-{top_k} ---")
-            header = f"{'Snippet Types':>25} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Avg F1':>8} | {'Hit Rate':>9}"
+            header = f"{'Snippet Types':>25} | {'UseLLM':>8} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Avg F1':>8} | {'Hit Rate':>9}"
             print(header)
             print("-" * 100)
             for row in df_k:
-                print(f"{row['snippet_types']:>25} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['average_f1']:>8.4f} | {row['hit_rate']:>9.4f}")
+                print(f"{row['snippet_types']:>25} | {row['use_llm']:>8} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['average_f1']:>8.4f} | {row['hit_rate']:>9.4f}")
 
     def export_to_json(self, output_path: str):
         export_data = {
@@ -275,15 +322,165 @@ class TraceLinkResultAnalyzer:
 
         print(f"\n结果已导出到: {output_path}")
 
+    def export_to_excel(self, output_path: str):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, Alignment, PatternFill
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            print("请先安装 openpyxl: pip install openpyxl")
+            return
+
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font_white = Font(bold=True, color="FFFFFF")
+
+        all_stats = self.get_all_statistics()
+
+        ws_summary = wb.create_sheet("Top-K汇总")
+        headers_summary = ["Top-K", "Recall", "Precision", "F1", "Avg Recall", "Avg Precision", "Avg F1", "Hit Rate"]
+        ws_summary.append(headers_summary)
+        for col in range(1, len(headers_summary) + 1):
+            cell = ws_summary.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for row in self.compare_top_k_performance():
+            ws_summary.append([
+                row['top_k'],
+                f"{row['overall_recall']:.2%}",
+                f"{row['overall_precision']:.2%}",
+                f"{row['overall_f1']:.2%}",
+                f"{row['average_recall']:.2%}",
+                f"{row['average_precision']:.2%}",
+                f"{row['average_f1']:.2%}",
+                f"{row['hit_rate']:.2%}"
+            ])
+        for col in range(1, len(headers_summary) + 1):
+            ws_summary.column_dimensions[get_column_letter(col)].width = 12
+
+        ws_encoder = wb.create_sheet("编码器对比")
+        headers_encoder = ["Encoder", "Snippet Types", "Recall", "Precision", "F1", "Avg F1", "Hit Rate"]
+        ws_encoder.append(headers_encoder)
+        for col in range(1, len(headers_encoder) + 1):
+            cell = ws_encoder.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for row in self.compare_encoders(top_k=10):
+            ws_encoder.append([
+                row['encoder'],
+                row['snippet_types'],
+                f"{row['overall_recall']:.2%}",
+                f"{row['overall_precision']:.2%}",
+                f"{row['overall_f1']:.2%}",
+                f"{row['average_f1']:.2%}",
+                f"{row['hit_rate']:.2%}"
+            ])
+        ws_encoder.column_dimensions['A'].width = 15
+        ws_encoder.column_dimensions['B'].width = 30
+
+        ws_snippet = wb.create_sheet("片段类型对比")
+        headers_snippet = ["Snippet Types", "Recall", "Precision", "F1", "Avg F1", "Hit Rate"]
+        ws_snippet.append(headers_snippet)
+        for col in range(1, len(headers_snippet) + 1):
+            cell = ws_snippet.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for row in self.compare_snippet_types(top_k=10):
+            ws_snippet.append([
+                row['snippet_types'],
+                f"{row['overall_recall']:.2%}",
+                f"{row['overall_precision']:.2%}",
+                f"{row['overall_f1']:.2%}",
+                f"{row['average_f1']:.2%}",
+                f"{row['hit_rate']:.2%}"
+            ])
+        ws_snippet.column_dimensions['A'].width = 30
+
+        ws_llm_summary = wb.create_sheet("LLM对比")
+        headers_llm = ["LLM类型", "Encoder", "Snippet Types", "Recall", "Precision", "F1"]
+        ws_llm_summary.append(headers_llm)
+        for col in range(1, len(headers_llm) + 1):
+            cell = ws_llm_summary.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for use_llm_label in ["使用LLM", "未使用LLM"]:
+            stats_filtered = [s for s in all_stats if s['top_k'] == 10 and s['use_llm'] == use_llm_label]
+            if not stats_filtered:
+                continue
+            llm_stats = defaultdict(list)
+            for s in stats_filtered:
+                key = (s['encoder'], s['snippet_types'])
+                llm_stats[key].append(s)
+            for (encoder, snippet), stat_list in llm_stats.items():
+                avg_f1 = sum(s['overall_f1'] for s in stat_list) / len(stat_list)
+                avg_recall = sum(s['overall_recall'] for s in stat_list) / len(stat_list)
+                avg_precision = sum(s['overall_precision'] for s in stat_list) / len(stat_list)
+                ws_llm_summary.append([
+                    use_llm_label,
+                    encoder,
+                    snippet,
+                    f"{avg_recall:.2%}",
+                    f"{avg_precision:.2%}",
+                    f"{avg_f1:.2%}"
+                ])
+        ws_llm_summary.column_dimensions['A'].width = 12
+        ws_llm_summary.column_dimensions['B'].width = 15
+        ws_llm_summary.column_dimensions['C'].width = 30
+
+        for top_k in sorted(set(s['top_k'] for s in all_stats)):
+            df_k = [s for s in all_stats if s['top_k'] == top_k]
+            df_k.sort(key=lambda x: x['overall_f1'], reverse=True)
+            ws = wb.create_sheet(f"Top{top_k}详情")
+            headers = ["Snippet Types", "UseLLM", "Recall", "Precision", "F1", "Avg F1", "Hit Rate",
+                      "总需求", "有变更", "至少命中", "变更文件", "预测文件", "命中", "FP"]
+            ws.append(headers)
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=col)
+                cell.font = header_font_white
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal='center')
+            for row in df_k:
+                ws.append([
+                    row['snippet_types'],
+                    row['use_llm'],
+                    f"{row['overall_recall']:.2%}",
+                    f"{row['overall_precision']:.2%}",
+                    f"{row['overall_f1']:.2%}",
+                    f"{row['average_f1']:.2%}",
+                    f"{row['hit_rate']:.2%}",
+                    row['total_requirements'],
+                    row['requirements_with_change_files'],
+                    row['requirements_with_at_least_one_hit'],
+                    row['total_change_files'],
+                    row['total_predicted_files'],
+                    row['total_hit_files'],
+                    row['total_fp_files']
+                ])
+            ws.column_dimensions['A'].width = 30
+            ws.column_dimensions['B'].width = 12
+
+        wb.save(output_path)
+        print(f"\nExcel结果已导出到: {output_path}")
+
 
 def main():
-    results_dir = f"data\\{CONFIG['repo']}\\trace_link_results"
-    output_path = f"src\\trace_link\\{CONFIG['repo']}_analysis_output.json"
+    repo_name = CONFIG['repo']
+    results_dir = f"data\\{repo_name}\\trace_link_results"
+    json_output = os.path.join(results_dir, f"{repo_name}_analysis_output.json")
+    excel_output = os.path.join(results_dir, f"{repo_name}_analysis_output.xlsx")
 
     analyzer = TraceLinkResultAnalyzer(results_dir)
     analyzer.load_all_results()
     analyzer.print_summary()
-    analyzer.export_to_json(output_path)
+    analyzer.export_to_json(json_output)
+    analyzer.export_to_excel(excel_output)
 
 
 if __name__ == "__main__":

@@ -104,7 +104,7 @@ def process_requirement_text_llm(title, body):
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=4096,
         )
 
         # 获取模型返回的内容
