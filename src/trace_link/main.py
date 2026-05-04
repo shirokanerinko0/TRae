@@ -317,15 +317,50 @@ def trace_links():
         'results': results,
         'statistics': overall_stats
     }
-    
-    # 保存结果
+
+    # 保存完整结果
     output_file = os.path.join('data', CONFIG['repo'],'trace_link_results', get_trace_link_result_file_name())
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(final_output, f, indent=2, ensure_ascii=False, separators=(',', ': '))
-    
+
     print(f"\n追踪链接结果已保存到: {output_file}")
-    
+
+    # 保存统计结果（仅statistics + config）
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    llm_provider_name = CONFIG.get('LLMProvider')
+    llm_config = CONFIG.get(llm_provider_name, {}).copy() if llm_provider_name else {}
+    llm_config.pop('API_Key', None)
+
+    tlr_config = {
+        'encode_model_name': CONFIG.get('encode_model_name'),
+        'code_snippet': CONFIG.get('code_snippet'),
+        'top_k': CONFIG.get('top_k'),
+        'unique_file_only': CONFIG.get('unique_file_only'),
+        'requirement_processing': CONFIG.get('requirement_processing'),
+        'trace_link': CONFIG.get('trace_link'),
+        'code_embedding': CONFIG.get('code_embedding'),
+        'repo': CONFIG.get('repo'),
+        'LLMProvider': llm_provider_name,
+        'LLMtemperature': CONFIG.get('LLMtemperature'),
+        llm_provider_name: llm_config
+    }
+
+    stats_output = {
+        'statistics': overall_stats,
+        'config': tlr_config
+    }
+
+    stats_dir = os.path.join('data', CONFIG['repo'], 'statistics_results')
+    os.makedirs(stats_dir, exist_ok=True)
+    stats_file = os.path.join(stats_dir, f"{timestamp}.json")
+    with open(stats_file, 'w', encoding='utf-8') as f:
+        json.dump(stats_output, f, indent=2, ensure_ascii=False, separators=(',', ': '))
+
+    print(f"统计结果已保存到: {stats_file}")
+
     # 打印结果摘要
     for top_k, stats in overall_stats.items():
         print(f"\n" + "=" * 60)
