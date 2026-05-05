@@ -42,25 +42,29 @@ def run_trace_link():
 def main():
     original_config = save_original_config()
 
-    fixed_base_snippets = ["IO", "IMO", "IMD"]
+    fixed_base_snippets = ["IO", "IMO"]
 
     try:
         combinations = [
             ["CO","MO"],
             ["CO","MCC"],
-            ["CO","MD"],
-            ["CO","MDCC"],
-            ["CO","MO","MC"],
+            ["CO","MDCC", "IMD"],
             ["CO","MCC","MC"],
-            ["CO","MD","MC"],
-            ["CO","MDCC","MC"],
+            ["CO","MDCC","MC", "IMD"],
             ["CO","MCC","MO"],
-            ["CO","MD","MO"],
-            ["CO","MDCC","MO"],
-            ["CO","MO","MC"],
+            ["CO","MDCC","MO", "IMD"],
             ["CO","MCC","MC","MO"],
-            ["CO","MD","MC","MO"],
-            ["CO","MDCC","MC","MO"],
+            ["CO","MDCC","MC","MO", "IMD"],
+            ["CO","MDCC","MC","MCC","MD", "IMD"],
+            ["CO","MCC","MD"],
+            ["CO","MDCC", "IMD", "MD"],
+            ["CO","MCC","MC","MD"],
+            ["CO","MDCC","MC", "IMD","MD"],
+            ["CO","MCC","MO","MD"],
+            ["CO","MDCC","MO", "IMD","MD"],
+            ["CO","MCC","MC","MO","MD"],
+            ["CO","MDCC","MC","MO", "IMD","MD"],
+            ["CO","MDCC","MC","MCC","MD", "IMD","MD"]
         ]
 
         all_tests = []

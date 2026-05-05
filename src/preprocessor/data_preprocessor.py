@@ -181,9 +181,13 @@ class DataPreprocessor:
         :return: 预处理后的需求列表
         """
         max_workers = CONFIG["requirement_processing"].get("max_workers", 8)
-        
+        # 过滤没有change_files的需求
         if CONFIG.get("filter_req_no_change_files", True):
             requirements=[req for req in requirements if req.get('change_files', [])]
+        
+        # 过滤change_files数量超过最大值的需求
+        max_change_files = CONFIG.get("max_change_files", 20)
+        requirements = [req for req in requirements if len(req.get('change_files', [])) <= max_change_files]
         
         processed_requirements = []
         
