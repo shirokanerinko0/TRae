@@ -18,10 +18,116 @@ class TraceLinkResultAnalyzer:
         self.statistics_dir = os.path.join('data', self.repo_name, 'statistics_results')
         self.statistics_files = []
         self.all_results = []
+        self.code_snippet_stats = {}
+        self.overall_stats = {}
+
+    def load_overall_stats(self) -> Dict:
+        import glob as glob_module
+
+        prompt_dir = os.path.join('data', '..', 'LLMapi', 'prompt', 'process_req')
+        prompt_files = glob_module.glob(os.path.join(prompt_dir, "*.json"))
+
+        overall = {
+            'total_requirements': 0,
+            'requirements_with_change_files': 0,
+            'total_change_files': 0,
+            'total_hit_files': 0,
+            'avg_recall': 0.0,
+            'prompt_count': 0
+        }
+
+        recalls = []
+        for pf in prompt_files:
+            try:
+                with open(pf, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                stats = data.get('statistics', {})
+                if stats:
+                    overall['total_requirements'] = max(overall['total_requirements'], stats.get('total_requirements', 0))
+                    overall['requirements_with_change_files'] = max(overall['requirements_with_change_files'], stats.get('requirements_with_change_files', 0))
+                    overall['total_change_files'] = max(overall['total_change_files'], stats.get('total_change_files', 0))
+                    overall['total_hit_files'] = max(overall['total_hit_files'], stats.get('total_hit_files', 0))
+                    recalls.append(stats.get('overall_recall', 0))
+                    overall['prompt_count'] += 1
+            except Exception as e:
+                pass
+
+        if recalls:
+            overall['avg_recall'] = sum(recalls) / len(recalls)
+
+        self.overall_stats = overall
+        return overall
+
+    def load_code_snippet_stats(self) -> Dict:
+        import torch
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+        from src.model.calculate_code_vectors import get_pt_file_name
+
+        pt_file_name = get_pt_file_name()
+        pt_file_path = os.path.join('data', self.repo_name, pt_file_name)
+
+        snippet_counts = {
+            'total_snippets': 0,
+            'CO': 0,
+            'MO': 0,
+            'IMO': 0,
+            'MCC': 0,
+            'MDCC': 0,
+            'MC': 0,
+            'IMD': 0,
+            'IO': 0,
+            'FC': 0,
+            'CD': 0,
+            'MD': 0,
+            'IMC': 0,
+            'other': 0
+        }
+
+        try:
+            data = torch.load(pt_file_path, weights_only=False)
+            snippet_types = data.get('snippet_types', [])
+
+            snippet_counts['total_snippets'] += len(snippet_types)
+
+            for st in snippet_types:
+                if st.endswith('_CO') or st == 'class_CO':
+                    snippet_counts['CO'] += 1
+                elif st.endswith('_MO') or st == 'class_MO':
+                    snippet_counts['MO'] += 1
+                elif st == 'method_IMO':
+                    snippet_counts['IMO'] += 1
+                elif st == 'method_MCC':
+                    snippet_counts['MCC'] += 1
+                elif st == 'method_MDCC':
+                    snippet_counts['MDCC'] += 1
+                elif st == 'method_MC':
+                    snippet_counts['MC'] += 1
+                elif st == 'method_IMD':
+                    snippet_counts['IMD'] += 1
+                elif st == 'interface_IO' or st == 'class_IO':
+                    snippet_counts['IO'] += 1
+                elif st == 'code_FC':
+                    snippet_counts['FC'] += 1
+                elif st == 'class_CD':
+                    snippet_counts['CD'] += 1
+                elif st == 'method_MD':
+                    snippet_counts['MD'] += 1
+                elif st == 'method_IMC':
+                    snippet_counts['IMC'] += 1
+                else:
+                    snippet_counts['other'] += 1
+        except Exception as e:
+            print(f"Error loading {pt_file_path}: {e}")
+
+        self.code_snippet_stats = snippet_counts
+        return snippet_counts
 
     def load_all_results(self) -> List[Dict]:
         self.statistics_files = glob.glob(os.path.join(self.statistics_dir, "*.json"))
         self.statistics_files = [f for f in self.statistics_files if not f.endswith('_analysis_output.json')]
+
+        self.load_code_snippet_stats()
+        self.load_overall_stats()
 
         self.all_results = []
 
@@ -283,7 +389,7 @@ class TraceLinkResultAnalyzer:
                 'count': len(stat_list)
             })
 
-        return sorted(results, key=lambda x: x['overall_f1'], reverse=True)
+        return sorted(results, key=lambda x: x['overall_recall'], reverse=True)
 
     def compare_llm_usage(self, top_k: int = 10) -> List[Dict]:
         stats = self.get_all_statistics()
@@ -306,7 +412,7 @@ class TraceLinkResultAnalyzer:
                 'count': len(stat_list)
             })
 
-        return sorted(results, key=lambda x: x['overall_f1'], reverse=True)
+        return sorted(results, key=lambda x: x['overall_recall'], reverse=True)
 
     def compare_prompt_performance(self, top_k: int = 10) -> List[Dict]:
         stats = self.get_all_statistics()
@@ -336,7 +442,48 @@ class TraceLinkResultAnalyzer:
                 'count': len(stat_list)
             })
 
-        return sorted(results, key=lambda x: x['overall_f1'], reverse=True)
+        return sorted(results, key=lambda x: x['overall_recall'], reverse=True)
+
+    def print_code_snippet_stats(self):
+        print("=" * 100)
+        print("代码片段统计 (.pt文件)")
+        print("=" * 100)
+        stats = self.code_snippet_stats
+        if not stats:
+            print("未找到代码片段统计数据")
+            return
+        print(f"\n总片段数: {stats.get('total_snippets', 0):,}")
+        print("\n各类片段数量:")
+        print(f"  CO (类代码片段):     {stats.get('CO', 0):>8,}")
+        print(f"  MO (方法代码片段):   {stats.get('MO', 0):>8,}")
+        print(f"  IMO (接口方法片段):  {stats.get('IMO', 0):>8,}")
+        print(f"  MCC (方法类上下文):  {stats.get('MCC', 0):>8,}")
+        print(f"  MDCC (方法注释类上下文): {stats.get('MDCC', 0):>8,}")
+        print(f"  MC (方法注释):       {stats.get('MC', 0):>8,}")
+        print(f"  IMD (接口方法注释):  {stats.get('IMD', 0):>8,}")
+        print(f"  IO (接口片段):       {stats.get('IO', 0):>8,}")
+        print(f"  FC (文件代码片段):   {stats.get('FC', 0):>8,}")
+        print(f"  CD (类注释片段):     {stats.get('CD', 0):>8,}")
+        print(f"  MD (方法注释):       {stats.get('MD', 0):>8,}")
+        print(f"  IMC (接口方法注释):  {stats.get('IMC', 0):>8,}")
+        print(f"  other:               {stats.get('other', 0):>8,}")
+        print()
+
+    def print_overall_stats(self):
+        print("=" * 100)
+        print("整体项目统计")
+        print("=" * 100)
+        stats = self.overall_stats
+        if not stats:
+            print("未找到整体统计数据")
+            return
+        print(f"\n  总需求数:                    {stats.get('total_requirements', 0):>8,}")
+        print(f"  有变更文件的需求数:          {stats.get('requirements_with_change_files', 0):>8,}")
+        print(f"  总变更文件数:                {stats.get('total_change_files', 0):>8,}")
+        print(f"  总命中文件数:                {stats.get('total_hit_files', 0):>8,}")
+        print(f"  测试的Prompt数量:            {stats.get('prompt_count', 0):>8,}")
+        print(f"  平均召回率 (from prompts):   {stats.get('avg_recall', 0):>8.4f}")
+        print()
 
     def print_summary(self):
         print("=" * 100)
@@ -344,10 +491,13 @@ class TraceLinkResultAnalyzer:
         print("=" * 100)
         print(f"\n共加载 {len(self.statistics_files)} 个统计文件\n")
 
+        self.print_code_snippet_stats()
+        self.print_overall_stats()
+
         all_stats = self.get_all_statistics()
 
         print("=" * 100)
-        print("LLM使用对比 (Top-10, 按F1排序)")
+        print("LLM使用对比 (Top-10, 按Recall排序)")
         print("=" * 100)
         llm_comparison = self.compare_llm_usage(top_k=10)
         header = f"{'UseLLM':>30} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Count':>6}"
@@ -357,7 +507,7 @@ class TraceLinkResultAnalyzer:
             print(f"{row['use_llm']:>30} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['count']:>6}")
 
         print("\n" + "=" * 100)
-        print("Prompt对比 (Top-10, 按F1排序)")
+        print("Prompt对比 (Top-10, 按Recall排序)")
         print("=" * 100)
         prompt_comparison = self.compare_prompt_performance(top_k=10)
         header = f"{'Prompt':>20} | {'PrefixTitle':>12} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Count':>6}"
@@ -377,7 +527,7 @@ class TraceLinkResultAnalyzer:
             print(f"{row['top_k']:>6} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['average_recall']:>10.4f} | {row['average_precision']:>10.4f} | {row['average_f1']:>8.4f} | {row['hit_rate']:>9.4f}")
 
         print("\n" + "=" * 100)
-        print("编码器+LLM组合对比 (Top-10, 按F1排序)")
+        print("编码器+LLM组合对比 (Top-10, 按Recall排序)")
         print("=" * 100)
         df_encoder = self.compare_encoders(top_k=10)
         header = f"{'Encoder':>15} | {'Snippet Types':>25} | {'UseLLM':>20} | {'Recall':>8} | {'F1':>8}"
@@ -387,11 +537,11 @@ class TraceLinkResultAnalyzer:
             print(f"{row['encoder']:>15} | {row['snippet_types']:>25} | {row['use_llm']:>20} | {row['overall_recall']:>8.4f} | {row['overall_f1']:>8.4f}")
 
         print("\n" + "=" * 100)
-        print("各 Top-K 配置详细结果 (按F1排序)")
+        print("各 Top-K 配置详细结果 (按Recall排序)")
         print("=" * 100)
         for top_k in sorted(set(s['top_k'] for s in all_stats)):
             df_k = [s for s in all_stats if s['top_k'] == top_k]
-            df_k.sort(key=lambda x: x['overall_f1'], reverse=True)
+            df_k.sort(key=lambda x: x['overall_recall'], reverse=True)
             print(f"\n--- Top-{top_k} ---")
             header = f"{'Encoder':>12} | {'Snippet Types':>25} | {'UseLLM':>20} | {'Recall':>8} | {'Prec':>8} | {'F1':>8} | {'Count':>5}"
             print(header)
@@ -404,7 +554,9 @@ class TraceLinkResultAnalyzer:
         export_data = {
             'summary': {
                 'repo': self.repo_name,
-                'statistics_files': len(self.statistics_files)
+                'statistics_files': len(self.statistics_files),
+                'code_snippet_stats': self.code_snippet_stats,
+                'overall_stats': self.overall_stats
             },
             'llm_comparison': self.compare_llm_usage(top_k=10),
             'prompt_comparison': self.compare_prompt_performance(top_k=10),
@@ -435,6 +587,48 @@ class TraceLinkResultAnalyzer:
         header_font_white = Font(bold=True, color="FFFFFF")
 
         all_stats = self.get_all_statistics()
+
+        ws_snippet = wb.create_sheet("代码片段统计")
+        ws_snippet.append(["类型", "数量"])
+        for col in range(1, 3):
+            cell = ws_snippet.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        ws_snippet.append(["总片段数", self.code_snippet_stats.get('total_snippets', 0)])
+        ws_snippet.append(["CO (类代码片段)", self.code_snippet_stats.get('CO', 0)])
+        ws_snippet.append(["MO (方法代码片段)", self.code_snippet_stats.get('MO', 0)])
+        ws_snippet.append(["IMO (接口方法片段)", self.code_snippet_stats.get('IMO', 0)])
+        ws_snippet.append(["MCC (方法类上下文)", self.code_snippet_stats.get('MCC', 0)])
+        ws_snippet.append(["MDCC (方法注释类上下文)", self.code_snippet_stats.get('MDCC', 0)])
+        ws_snippet.append(["MC (方法注释)", self.code_snippet_stats.get('MC', 0)])
+        ws_snippet.append(["IMD (接口方法注释)", self.code_snippet_stats.get('IMD', 0)])
+        ws_snippet.append(["IO (接口片段)", self.code_snippet_stats.get('IO', 0)])
+        ws_snippet.append(["FC (文件代码片段)", self.code_snippet_stats.get('FC', 0)])
+        ws_snippet.append(["CD (类注释片段)", self.code_snippet_stats.get('CD', 0)])
+        ws_snippet.append(["MD (方法注释)", self.code_snippet_stats.get('MD', 0)])
+        ws_snippet.append(["IMC (接口方法注释)", self.code_snippet_stats.get('IMC', 0)])
+        ws_snippet.append(["other", self.code_snippet_stats.get('other', 0)])
+        ws_snippet.column_dimensions['A'].width = 25
+        ws_snippet.column_dimensions['B'].width = 15
+
+        ws_overall = wb.create_sheet("整体情况")
+        ws_overall.append(["指标", "值"])
+        for col in range(1, 3):
+            cell = ws_overall.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        ws_overall.append(["项目", self.repo_name])
+        ws_overall.append(["总需求数", self.overall_stats.get('total_requirements', 0)])
+        ws_overall.append(["有变更文件的需求数", self.overall_stats.get('requirements_with_change_files', 0)])
+        ws_overall.append(["总变更文件数", self.overall_stats.get('total_change_files', 0)])
+        ws_overall.append(["总命中文件数", self.overall_stats.get('total_hit_files', 0)])
+        ws_overall.append(["测试的Prompt数量", self.overall_stats.get('prompt_count', 0)])
+        ws_overall.append(["平均召回率 (from prompts)", f"{self.overall_stats.get('avg_recall', 0):.4f}"])
+        ws_overall.append(["代码片段总数", self.code_snippet_stats.get('total_snippets', 0)])
+        ws_overall.column_dimensions['A'].width = 25
+        ws_overall.column_dimensions['B'].width = 20
 
         ws_summary = wb.create_sheet("LLM对比")
         headers_summary = ["LLM类型", "Recall", "Precision", "F1", "数量"]
@@ -539,13 +733,22 @@ class TraceLinkResultAnalyzer:
 
 def main():
     repo_name = CONFIG['repo']
-    results_dir = os.path.join('data', repo_name, 'trace_link_results')
-    stats_dir = os.path.join('data', repo_name, 'statistics_results')
+    data_dir = os.path.join('data')
+    actual_dir = None
+    if os.path.isdir(data_dir):
+        for d in os.listdir(data_dir):
+            if d.lower() == repo_name.lower():
+                actual_dir = d
+                break
+    if actual_dir is None:
+        actual_dir = repo_name
+    results_dir = os.path.join('data', actual_dir, 'trace_link_results')
+    stats_dir = os.path.join('data', actual_dir, 'statistics_results')
 
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
-    json_output = os.path.join(stats_dir, f"{repo_name}_analysis_output.json")
-    excel_output = os.path.join(results_dir, f"{repo_name}_analysis_output.xlsx")
+    json_output = os.path.join(stats_dir, f"{actual_dir.lower()}_analysis_output.json")
+    excel_output = os.path.join(results_dir, f"{actual_dir.lower()}_analysis_output.xlsx")
 
     analyzer = TraceLinkResultAnalyzer(repo_name)
     analyzer.load_all_results()

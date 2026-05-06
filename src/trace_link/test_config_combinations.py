@@ -4,6 +4,7 @@
 """
 测试不同配置组合的脚本
 测试 config.json 中 code_snippet 配置的不同组合
+支持多仓库测试
 """
 
 import os
@@ -34,83 +35,101 @@ def update_config(code_snippet):
     config['code_snippet'] = code_snippet
     save_config(config)
 
+def update_repo_config(repo_name):
+    config = load_config()
+    config['repo'] = repo_name
+    save_config(config)
+
 def run_trace_link():
+    from src.trace_link.main import trace_links
+    from src.utils.utils import load_config
+    import src.trace_link.main as trace_link_module
+    trace_link_module.CONFIG = load_config()
+    trace_link_module.encoder = None
+    trace_link_module.data = None
     print("\n开始运行 trace_links()...")
     trace_links()
     print("trace_links() 执行完成")
 
+def run_analyze_results():
+    from src.utils.utils import load_config
+    import analyze_results as analyze_module
+    analyze_module.CONFIG = load_config()
+    print("\n运行 analyze_results()...")
+    from analyze_results import main as analyze_main
+    analyze_main()
+
+def test_repo_combinations(repo_name, combinations, fixed_base_snippets):
+    print(f"\n{'#' * 80}")
+    print(f"开始测试仓库: {repo_name}")
+    print(f"{'#' * 80}")
+
+    update_repo_config(repo_name)
+
+    test_directory = f"data\\{repo_name}\\origin_src"
+
+    print("\n1. 分析代码结构...")
+    analyze_directory(test_directory)
+
+    print("\n2. 计算代码向量...")
+    process_analysis_files(test_directory)
+
+    all_tests = []
+    for combo in combinations:
+        combined = sorted(list(set(combo + fixed_base_snippets)))
+        all_tests.append(combined)
+
+    print(f"\n总共需要测试 {len(all_tests)} 个配置组合\n")
+
+    print("\n" + "=" * 80)
+    print("开始批量测试不同配置")
+    print("=" * 80)
+
+    for i, code_snippet in enumerate(all_tests, 1):
+        print(f"\n{'=' * 80}")
+        print(f"测试组合 {i}/{len(all_tests)}: {code_snippet}")
+        print("=" * 80)
+
+        update_config(code_snippet)
+        run_trace_link()
+
+    print("\n" + "=" * 80)
+    print(f"仓库 {repo_name} 所有测试完成！")
+    print("=" * 80)
+
+    run_analyze_results()
+
 def main():
     original_config = save_original_config()
 
-    fixed_base_snippets = ["IO", "IMO"]
+    fixed_base_snippets = ["CO", "IO", "IMO"]
+
+    combinations = [
+        ["MO"],
+        ["MCC"],
+        ["MD", "IMD"],
+        ["MDCC", "IMD"],
+        ["MO", "MCC"],
+        ["MO", "MDCC","IMD"],
+    ]
+
+    repos_to_test = [
+        "netty",
+        # "kafka",
+        # "redisson",
+    ]
 
     try:
-        combinations = [
-            ["CO","MO"],
-            ["CO","MCC"],
-            ["CO","MDCC", "IMD"],
-            ["CO","MCC","MC"],
-            ["CO","MDCC","MC", "IMD"],
-            ["CO","MCC","MO"],
-            ["CO","MDCC","MO", "IMD"],
-            ["CO","MCC","MC","MO"],
-            ["CO","MDCC","MC","MO", "IMD"],
-            ["CO","MDCC","MC","MCC","MD", "IMD"],
-            ["CO","MCC","MD"],
-            ["CO","MDCC", "IMD", "MD"],
-            ["CO","MCC","MC","MD"],
-            ["CO","MDCC","MC", "IMD","MD"],
-            ["CO","MCC","MO","MD"],
-            ["CO","MDCC","MO", "IMD","MD"],
-            ["CO","MCC","MC","MO","MD"],
-            ["CO","MDCC","MC","MO", "IMD","MD"],
-            ["CO","MDCC","MC","MCC","MD", "IMD","MD"]
-        ]
+        for repo in repos_to_test:
+            test_repo_combinations(repo, combinations, fixed_base_snippets)
 
-        all_tests = []
-        for combo in combinations:
-            combined = list(set(combo + fixed_base_snippets))
-            all_tests.append(combined)
-
-        print(f"总共需要测试 {len(all_tests)} 个配置组合\n")
-
-        test_directory = f"data\\{load_config()['repo']}\\origin_src"
-
-        print("=" * 80)
-        print("预执行：代码分析和向量计算（只执行一次）")
-        print("=" * 80)
-
-        print("\n1. 分析代码结构...")
-        analyze_directory(test_directory)
-
-        print("\n2. 计算代码向量...")
-        process_analysis_files(test_directory)
-
-        print("\n" + "=" * 80)
-        print("开始批量测试不同配置")
-        print("=" * 80)
-
-        for i, code_snippet in enumerate(all_tests, 1):
-            print(f"\n{'=' * 80}")
-            print(f"测试组合 {i}/{len(all_tests)}: {code_snippet}")
-            print("=" * 80)
-
-            update_config(code_snippet)
-            run_trace_link()
-
-        print("\n" + "=" * 80)
-        print("所有测试完成！")
-        print("=" * 80)
+        print("\n" + "#" * 80)
+        print("所有仓库测试完成！")
+        print("#" * 80)
 
     finally:
         restore_original_config(original_config)
         print("\n已恢复原始配置")
-
-    print("\n" + "=" * 80)
-    print("运行分析程序...")
-    print("=" * 80)
-    from analyze_results import main as analyze_main
-    analyze_main()
 
 if __name__ == "__main__":
     main()

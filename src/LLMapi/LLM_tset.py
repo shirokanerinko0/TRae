@@ -17,7 +17,7 @@ BASE_URL = CONFIG[LLMProvider]["Base_URL"]  # 使用指定模型的API地址
 MAX_BODY_LEN = 4000
 
 # 获取当前使用的提示词配置
-CURRENT_PROMPT_NAME = CONFIG.get("prompt_name", "prompt2")  # 默认使用 prompt2 (最佳效果)
+CURRENT_PROMPT_NAME = CONFIG["requirement_processing"].get("prompt_name", "prompt2")
 
 # 创建OpenAI客户端
 client = OpenAI(
@@ -94,13 +94,13 @@ def process_requirement_text_llm(title, body):
     else:
         # 格式化提示词
         prompt = prompt_template.format(title=title, body=body)
-    
+        print(prompt)
     try:
         # 使用OpenAI客户端调用API
         response = client.chat.completions.create(
             model=CONFIG[LLMProvider]["model"],  # 使用指定模型
             messages=[
-                {"role": "system", "content": "You are a precise and concise software requirements analysis assistant."},
+                {"role": "system", "content": "You are a specialized Data Preprocessor for Software Engineering Information Retrieval. Your task is to extract exact developer vocabulary from GitHub Issues for downstream Dense Vector Representation (e.g., Jina embeddings). You must act as a lossless filter: classify the issue, remove structural noise, but strictly preserve 100% of the original technical vocabulary without ANY summarization or external knowledge injection."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
