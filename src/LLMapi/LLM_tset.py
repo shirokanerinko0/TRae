@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from src.utils.utils import load_config
-from src.LLMapi.prompt import PROMPTS, get_prompt, get_best_prompt, list_prompts_by_recall
+from src.LLMapi.prompt import PROMPTS, get_prompt, get_best_prompt, list_prompts_by_recall, get_prompt_full
 
 
 CONFIG = load_config()
@@ -18,7 +18,7 @@ MAX_BODY_LEN = 4000
 
 # 获取当前使用的提示词配置
 CURRENT_PROMPT_NAME = CONFIG["requirement_processing"].get("prompt_name", "prompt2")
-
+system_prompt = "You are a precise and concise software analysis assistant."
 # 创建OpenAI客户端
 client = OpenAI(
     api_key=API_KEY,
@@ -81,10 +81,10 @@ def process_requirement_text_llm(title, body):
     """
     
     # 获取配置的提示词模板
-    prompt_template = get_prompt(CURRENT_PROMPT_NAME)
-    
+    prompt_data = get_prompt_full(CURRENT_PROMPT_NAME)
+
     # 如果没有提示词（without_prompt），直接使用 title + body
-    if prompt_template is None:
+    if prompt_data is None:
         # 不使用提示词的情况，直接返回原始内容
         return json.dumps({
             "reason": "No prompt used, returning original title + body",
@@ -92,17 +92,17 @@ def process_requirement_text_llm(title, body):
             "search_query": f"{title}\n{body}"
         })
     else:
-        # 格式化提示词
+        prompt_template = prompt_data.get("prompt", "")
+        system_prompt = prompt_data.get("system_prompt", "")
         prompt = prompt_template.format(title=title, body=body)
-        print(prompt)
     try:
-        # 使用OpenAI客户端调用API
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
         response = client.chat.completions.create(
-            model=CONFIG[LLMProvider]["model"],  # 使用指定模型
-            messages=[
-                {"role": "system", "content": "You are a specialized Data Preprocessor for Software Engineering Information Retrieval. Your task is to extract exact developer vocabulary from GitHub Issues for downstream Dense Vector Representation (e.g., Jina embeddings). You must act as a lossless filter: classify the issue, remove structural noise, but strictly preserve 100% of the original technical vocabulary without ANY summarization or external knowledge injection."},
-                {"role": "user", "content": prompt}
-            ],
+            model=CONFIG[LLMProvider]["model"],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=CONFIG["LLMtemperature"],
             max_tokens=4096,

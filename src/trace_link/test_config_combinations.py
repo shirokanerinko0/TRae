@@ -4,7 +4,7 @@
 """
 测试不同配置组合的脚本
 测试 config.json 中 code_snippet 配置的不同组合
-支持多仓库测试
+支持多仓库、多提示词测试
 """
 
 import os
@@ -40,6 +40,15 @@ def update_repo_config(repo_name):
     config['repo'] = repo_name
     save_config(config)
 
+def update_prompt_config(prompt_name):
+    config = load_config()
+    config['requirement_processing']['prompt_name'] = prompt_name
+    if prompt_name == "noprompt":
+        config['requirement_processing']['use_llm_processing'] = False
+    else:
+        config['requirement_processing']['use_llm_processing'] = True
+    save_config(config)
+
 def run_trace_link():
     from src.trace_link.main import trace_links
     from src.utils.utils import load_config
@@ -59,7 +68,7 @@ def run_analyze_results():
     from analyze_results import main as analyze_main
     analyze_main()
 
-def test_repo_combinations(repo_name, combinations, fixed_base_snippets):
+def test_repo_prompt_combinations(repo_name, combinations, fixed_base_snippets, prompts_to_test):
     print(f"\n{'#' * 80}")
     print(f"开始测试仓库: {repo_name}")
     print(f"{'#' * 80}")
@@ -79,19 +88,28 @@ def test_repo_combinations(repo_name, combinations, fixed_base_snippets):
         combined = sorted(list(set(combo + fixed_base_snippets)))
         all_tests.append(combined)
 
-    print(f"\n总共需要测试 {len(all_tests)} 个配置组合\n")
+    print(f"代码片段组合数量: {len(all_tests)}")
+    print(f"提示词数量: {len(prompts_to_test)}")
+    print(f"总测试数: {len(all_tests) * len(prompts_to_test)}")
 
-    print("\n" + "=" * 80)
-    print("开始批量测试不同配置")
-    print("=" * 80)
+    for prompt_name in prompts_to_test:
+        print(f"\n{'#' * 80}")
+        print(f"提示词: {prompt_name}")
+        print(f"{'#' * 80}")
 
-    for i, code_snippet in enumerate(all_tests, 1):
-        print(f"\n{'=' * 80}")
-        print(f"测试组合 {i}/{len(all_tests)}: {code_snippet}")
+        update_prompt_config(prompt_name)
+
+        for i, code_snippet in enumerate(all_tests, 1):
+            print(f"\n{'=' * 80}")
+            print(f"提示词: {prompt_name} | 组合 {i}/{len(all_tests)}: {code_snippet}")
+            print("=" * 80)
+
+            update_config(code_snippet)
+            run_trace_link()
+
+        print("\n" + "=" * 80)
+        print(f"提示词 {prompt_name} 所有组合测试完成！")
         print("=" * 80)
-
-        update_config(code_snippet)
-        run_trace_link()
 
     print("\n" + "=" * 80)
     print(f"仓库 {repo_name} 所有测试完成！")
@@ -110,7 +128,20 @@ def main():
         ["MD", "IMD"],
         ["MDCC", "IMD"],
         ["MO", "MCC"],
-        ["MO", "MDCC","IMD"],
+        ["MO", "MDCC", "IMD"],
+    ]
+
+    prompts_to_test = [
+        # "prompt2",
+        # "prompt3",
+        # "prompt4",
+        # "prompt5",
+        # "prompt6",
+        "prompt7",
+        # "prompt8",
+        # "prompt9",
+        # "prompt10",
+        # "noprompt",
     ]
 
     repos_to_test = [
@@ -121,7 +152,7 @@ def main():
 
     try:
         for repo in repos_to_test:
-            test_repo_combinations(repo, combinations, fixed_base_snippets)
+            test_repo_prompt_combinations(repo, combinations, fixed_base_snippets, prompts_to_test)
 
         print("\n" + "#" * 80)
         print("所有仓库测试完成！")
