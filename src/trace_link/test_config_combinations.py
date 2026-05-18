@@ -53,7 +53,11 @@ def run_trace_link():
     from src.trace_link.main import trace_links
     from src.utils.utils import load_config
     import src.trace_link.main as trace_link_module
-    trace_link_module.CONFIG = load_config()
+    import src.utils.utils as utils_module
+
+    new_config = load_config()
+    trace_link_module.CONFIG = new_config
+    utils_module.CONFIG = new_config
     trace_link_module.encoder = None
     trace_link_module.data = None
     print("\n开始运行 trace_links()...")
@@ -129,24 +133,34 @@ def main():
         ["MDCC", "IMD"],
         ["MO", "MCC"],
         ["MO", "MDCC", "IMD"],
+        # ["MO", "MDCC", "MCC","IMD"],
     ]
 
     prompts_to_test = [
-        # "prompt2",
+        "prompt2",
         # "prompt3",
         # "prompt4",
         # "prompt5",
         # "prompt6",
-        "prompt7",
+        # "prompt7",
         # "prompt8",
         # "prompt9",
         # "prompt10",
+        # "prompt11",
+        # "prompt12",
+        # "prompt13",
+        # "prompt14",
+        # "prompt15",
+        # "prompt16",
+        # "prompt17",
+        # "prompt18",
+        # "prompt19",
         # "noprompt",
     ]
 
     repos_to_test = [
         "netty",
-        # "kafka",
+        "kafka",
         # "redisson",
     ]
 

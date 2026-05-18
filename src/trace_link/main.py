@@ -9,7 +9,7 @@ from src.JavaCodeAnalyzer.tree_sitter_java_analyzer import analyze_directory
 from src.model.calculate_code_vectors import process_analysis_files
 from src.LLMapi.LLM_tset import check_requirement_code_relation
 from src.model.encoder_factory import EncoderFactory
-from src.trace_link.calculate import calculate_recall
+from src.trace_link.calculate import calculate_recall, calculate_ap
 
 CONFIG = load_config()
 encoder = None
@@ -101,8 +101,6 @@ def check_requirement_code_relation_llm(req, file_path, code_snippet=""):
 def process_files_with_encoder(req, change_files):
     # 获取配置的代码片段类型
     code_snippet_types = CONFIG.get("code_snippet", ["default"])
-    
-    links_all = {}
 
     # 构建需求文本
     requirement_text = req.get('search_query', '')
@@ -140,37 +138,53 @@ def process_files_with_encoder(req, change_files):
     def get_snippet_suffix(st):
         return st.split("_", 1)[1] if "_" in st else st
 
-    links_all = {}
-    seen_file_paths = set()
-    current_pointer = 0
-    links = []
+    # 高性能优化：一次性转换，避免循环内 .item()
+    sorted_indices_list = sorted_indices.tolist()
+    snippet_suffixes = [get_snippet_suffix(t) if i < len(snippet_types) else "unknown" for i, t in enumerate(snippet_types)]
+    similarity_values = similarities.tolist()
 
-    for top_k in top_k_list:
-        k = min(top_k, embeddings.shape[0])
+    # 将 ap_max_rank 加入扩展列表，确保能获取足够多的链接用于 AP 计算
+    ap_max_rank = CONFIG['trace_link'].get('ap_max_rank', 1000)
+    extended_top_k_list = sorted(set(top_k_list + [ap_max_rank]))
 
-        while len(links) < k and current_pointer < len(sorted_indices):
-            idx = sorted_indices[current_pointer].item()
-            current_pointer += 1
-
+    # 一次过滤获取有效索引
+    valid_indices = []
+    max_needed = max(extended_top_k_list)
+    if unique_file_only:
+        seen = set()
+        for idx in sorted_indices_list:
+            if len(valid_indices) >= max_needed:
+                break
             file_path = file_paths[idx]
-            snippet_type = snippet_types[idx] if idx < len(snippet_types) else "unknown"
-            suffix = get_snippet_suffix(snippet_type)
-
-            if suffix not in allowed_snippets:
+            if file_path in seen:
                 continue
+            if snippet_suffixes[idx] not in allowed_snippets:
+                continue
+            seen.add(file_path)
+            valid_indices.append(idx)
+    else:
+        for idx in sorted_indices_list:
+            if len(valid_indices) >= max_needed:
+                break
+            if snippet_suffixes[idx] in allowed_snippets:
+                valid_indices.append(idx)
 
-            if (not unique_file_only) or (file_path not in seen_file_paths):
-                seen_file_paths.add(file_path)
-                links.append({
-                    'file_path': file_path,
-                    'class_name': class_names[idx],
-                    'method_name': method_names[idx],
-                    'similarity': similarities[idx].item(),
-                    'original_code': original_codes[idx],
-                    'snippet_type': snippet_type
-                })
-
-        links_all[top_k] = list(links)
+    # 构建每个 top_k 的链接列表（切片方式，性能更好）
+    links_all = {}
+    for top_k in extended_top_k_list:
+        k = min(top_k, len(valid_indices))
+        selected = valid_indices[:k]
+        links_all[top_k] = [
+            {
+                "file_path": file_paths[idx],
+                "class_name": class_names[idx],
+                "method_name": method_names[idx],
+                "similarity": similarity_values[idx],
+                "original_code": original_codes[idx],
+                "snippet_type": snippet_types[idx] if idx < len(snippet_types) else "unknown",
+            }
+            for idx in selected
+        ]
 
     return links_all
 
@@ -216,7 +230,9 @@ def trace_links():
             'average_f1': 0.0,
             'total_recall_sum': 0.0,
             'total_precision_sum': 0.0,
-            'total_f1_sum': 0.0
+            'total_f1_sum': 0.0,
+            'total_ap_sum': 0.0,
+            'map': 0.0
         }
     
     for req in tqdm(requirements, desc="已完成追踪连接需求："):
@@ -244,12 +260,19 @@ def trace_links():
                 links.sort(key=lambda x: (not x['llm_result']['related'], -x['llm_result']['confidence']))
             all_links[top_k] = links
         
-        # 计算每个topk的召回率
+        # 计算每个topk的召回率和AP
         if has_change_files:
+            # 使用 ap_max_rank 对应的链接计算 AP
+            ap_max_rank = CONFIG['trace_link'].get('ap_max_rank', 1000)
+            ap = calculate_ap(links_all[ap_max_rank], change_files, max_rank=ap_max_rank)
+
             for top_k, links in all_links.items():
+                if top_k == ap_max_rank:
+                    continue
                 recall_info = calculate_recall(links, change_files)
+                recall_info['ap'] = ap
                 req_recalls[top_k] = recall_info
-                
+
                 # 更新整体统计
                 stats = overall_stats[top_k]
                 stats['requirements_with_change_files'] += 1
@@ -262,6 +285,7 @@ def trace_links():
                 stats['total_recall_sum'] += recall_info['recall']
                 stats['total_precision_sum'] += recall_info['precision']
                 stats['total_f1_sum'] += recall_info['f1']
+                stats['total_ap_sum'] += ap
         
         # 选择最大topk的链接作为主链接
         max_topk = max(top_k_list)
@@ -303,14 +327,17 @@ def trace_links():
             stats['average_recall'] = stats['total_recall_sum'] / stats['requirements_with_change_files']
             stats['average_precision'] = stats['total_precision_sum'] / stats['requirements_with_change_files']
             stats['average_f1'] = stats['total_f1_sum'] / stats['requirements_with_change_files']
+            stats['map'] = stats['total_ap_sum'] / stats['requirements_with_change_files']
         else:
             stats['average_recall'] = 0.0
             stats['average_precision'] = 0.0
             stats['average_f1'] = 0.0
+            stats['map'] = 0.0
 
         del stats['total_recall_sum']
         del stats['total_precision_sum']
         del stats['total_f1_sum']
+        del stats['total_ap_sum']
 
     # 准备最终输出
     final_output = {
@@ -379,6 +406,7 @@ def trace_links():
         print(f"  平均召回率: {stats.get('average_recall', 0):.4f}")
         print(f"  平均准确率: {stats.get('average_precision', 0):.4f}")
         print(f"  平均F1分数: {stats.get('average_f1', 0):.4f}")
+        print(f"  MAP (Mean Average Precision): {stats.get('map', 0):.4f}")
         print("=" * 60)
     
     # 打印前几个需求的结果

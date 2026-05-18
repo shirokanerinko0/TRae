@@ -14,7 +14,7 @@ LLMProvider = CONFIG["LLMProvider"]
 # 从配置文件获取API密钥和基础URL
 API_KEY = CONFIG[LLMProvider]["API_Key"]
 BASE_URL = CONFIG[LLMProvider]["Base_URL"]  # 使用指定模型的API地址
-MAX_BODY_LEN = 4000
+MAX_BODY_LEN = 4096
 
 # 获取当前使用的提示词配置
 CURRENT_PROMPT_NAME = CONFIG["requirement_processing"].get("prompt_name", "prompt2")

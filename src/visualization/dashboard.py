@@ -191,8 +191,8 @@ def main():
         
         st.subheader("采集限制")
         limits = config.get('limits', {})
-        max_issues = st.number_input("最大Issues数", min_value=1, max_value=1000, value=limits.get('max_issues', 100), help="限制采集的Issues数量")
-        max_pull_requests = st.number_input("最大PR数", min_value=1, max_value=1000, value=limits.get('max_pull_requests', 100), help="限制采集的Pull Requests数量")
+        max_issues = st.number_input("最大Issues数", min_value=0, max_value=1000, value=limits.get('max_issues', 100), help="限制采集的Issues数量")
+        max_pull_requests = st.number_input("最大PR数", min_value=0, max_value=1000, value=limits.get('max_pull_requests', 100), help="限制采集的Pull Requests数量")
         
         st.subheader("过滤设置")
         filter_labels_str = st.text_input(
@@ -242,18 +242,27 @@ def main():
         st.subheader("代码片段配置")
         code_snippet_types = st.multiselect(
             "代码片段类型",
-            options=["MO","CO", "MC", "MCC", "MD", "MDCC", "CD", "FC"],
+            options=["MO", "CO", "MC", "MCC", "MD", "MDCC", "CD", "FC", "IMO", "IMD", "IMC", "IO", "CC", "IC", "ID", "IMCC", "IMDCC"],
             default=config.get('code_snippet', ["MO","CO"]),
             help="""
             选择要使用的代码片段类型:\n
-            MO: 方法片段\n
-            CO: 类片段\n
-            MC: 方法注释片段\n
-            MCC: 方法带类上下文\n
-            MD: 方法带注释\n
-            MDCC: 方法带注释和类上下文\n
-            CD: 类带注释\n
+            MO: 默认方法片段\n
+            CO: 默认类片段\n
+            MC: 方法注释\n
+            MCC: 方法带类上下文增强\n
+            MD: 方法带注释增强\n
+            MDCC: 方法带注释和类上下文增强\n
+            CD: 类带注释增强\n
             FC: 整个代码文件\n
+            IMO: 默认接口方法片段\n
+            IMD: 接口方法带注释增强\n
+            IMC: 接口方法注释\n
+            IO: 默认接口片段\n
+            CC: 类注释\n
+            IC: 接口注释\n
+            ID: 接口带注释\n
+            IMCC: 接口方法带类上下文\n
+            IMDCC: 接口方法带注释和类上下文\n
             """
         )
 
@@ -281,7 +290,7 @@ def main():
             save_config(new_config)
             st.success("配置已保存!")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["主页", "结果分析", "详细数据", "对比分析"])
+    tab1, tab2, tab3 = st.tabs(["主页", "结果分析", "详细数据"])
     
     with tab1:
         st.header("操作面板")
@@ -446,7 +455,7 @@ def main():
                             with col_h:
                                 st.metric("误报数(FP)", stats.get('total_fp_files', 0))
 
-                            col_i, col_j, col_k = st.columns(3)
+                            col_i, col_j, col_k, col_l = st.columns(4)
                             with col_i:
                                 precision = stats.get('overall_precision', 0)
                                 st.metric("准确率(Precision)", f"{precision:.2%}")
@@ -454,6 +463,9 @@ def main():
                                 f1 = stats.get('overall_f1', 0)
                                 st.metric("F1分数", f"{f1:.2%}")
                             with col_k:
+                                map_score = stats.get('map', 0)
+                                st.metric("MAP", f"{map_score:.4f}")
+                            with col_l:
                                 st.metric("Top-K", stats.get('top_k', 5))
                         else:
                             # 多top_k情况
@@ -481,7 +493,7 @@ def main():
                                     with col8:
                                         st.metric("误报(FP)", stat_data.get('total_fp_files', 0))
 
-                                    col9, col10, col11 = st.columns(3)
+                                    col9, col10, col11, col12 = st.columns(4)
                                     with col9:
                                         precision = stat_data.get('overall_precision', 0)
                                         st.metric("Precision", f"{precision:.2%}")
@@ -489,6 +501,9 @@ def main():
                                         f1 = stat_data.get('overall_f1', 0)
                                         st.metric("F1", f"{f1:.2%}")
                                     with col11:
+                                        map_score = stat_data.get('map', 0)
+                                        st.metric("MAP", f"{map_score:.4f}")
+                                    with col12:
                                         avg_recall = stat_data.get('average_recall', 0)
                                         st.metric("Avg Recall", f"{avg_recall:.2%}")
                         
@@ -631,13 +646,9 @@ def main():
                                         # 多top_k情况
                                         st.subheader("各Top-K指标")
                                         for top_k, recall_info in recall_data.items():
-                                            col_p, col_r, col_f, col_h = st.columns(4)
-                                            with col_p:
-                                                st.metric(f"Top {top_k} Precision", f"{recall_info.get('precision', 0):.2%}")
+                                            col_r, col_h = st.columns(2)
                                             with col_r:
                                                 st.metric(f"Top {top_k} Recall", f"{recall_info['recall']:.2%}")
-                                            with col_f:
-                                                st.metric(f"Top {top_k} F1", f"{recall_info.get('f1', 0):.2%}")
                                             with col_h:
                                                 st.metric(f"Top {top_k} 命中", f"{recall_info['hit_count']}/{recall_info['total_change_files']}")
                                 else:
@@ -669,93 +680,7 @@ def main():
                                     else:
                                         st.text(f"{cf}")
     
-    with tab4:
-        st.header("模型对比分析")
-        
-        available_repos = get_available_repos()
-        if not available_repos:
-            st.info("请先运行数据采集")
-        else:
-            selected_repo = st.selectbox("选择仓库", available_repos, key="repo_compare")
-            trace_files = get_trace_link_files(selected_repo)
-            
-            if len(trace_files) < 2:
-                st.info("需要至少两个追踪链接结果文件进行对比")
-            else:
-                selected_files = st.multiselect("选择要对比的结果文件", trace_files, default=trace_files[:min(3, len(trace_files))])
-                
-                if len(selected_files) >= 2:
-                    comparison_data = []
-                    for f in selected_files:
-                        data = load_trace_link_data(selected_repo, f)
-                        if data:
-                            stats = data.get('statistics', {})
-                            if isinstance(stats, dict) and 'top_k' in stats:
-                                # 单top_k情况
-                                comparison_data.append({
-                                    'file': f,
-                                    'model': encode_model_name,
-                                    'recall': stats.get('overall_recall', 0),
-                                    'precision': stats.get('overall_precision', 0),
-                                    'f1': stats.get('overall_f1', 0),
-                                    'total_req': stats.get('total_requirements', 0),
-                                    'with_change': stats.get('requirements_with_change_files', 0),
-                                    'at_least_one': stats.get('requirements_with_at_least_one_hit', 0),
-                                    'total_files': stats.get('total_change_files', 0),
-                                    'hit_files': stats.get('total_hit_files', 0),
-                                    'top_k': stats.get('top_k', 5)
-                                })
-                            else:
-                                # 多top_k情况，为每个top_k创建一条记录
-                                for top_k, stat_data in stats.items():
-                                    comparison_data.append({
-                                        'file': f,
-                                        'model': f"{encode_model_name}_top{top_k}",
-                                        'recall': stat_data.get('overall_recall', 0),
-                                        'precision': stat_data.get('overall_precision', 0),
-                                        'f1': stat_data.get('overall_f1', 0),
-                                        'total_req': stat_data.get('total_requirements', 0),
-                                        'with_change': stat_data.get('requirements_with_change_files', 0),
-                                        'at_least_one': stat_data.get('requirements_with_at_least_one_hit', 0),
-                                        'total_files': stat_data.get('total_change_files', 0),
-                                        'hit_files': stat_data.get('total_hit_files', 0),
-                                        'top_k': top_k
-                                    })
-
-                    df = pd.DataFrame(comparison_data)
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        fig = px.bar(df, x='model', y='recall',
-                                    title='各模型召回率对比',
-                                    text=[f"{r:.2%}" for r in df['recall']])
-                        st.plotly_chart(fig, use_container_width=True)
-
-                    with col2:
-                        fig = px.bar(df, x='model', y='f1',
-                                    title='各模型F1分数对比',
-                                    text=[f"{r:.2%}" for r in df['f1']])
-                        st.plotly_chart(fig, use_container_width=True)
-
-                    col3, col4 = st.columns(2)
-                    with col3:
-                        fig = px.bar(df, x='model', y='precision',
-                                    title='各模型精确率对比',
-                                    text=[f"{r:.2%}" for r in df['precision']])
-                        st.plotly_chart(fig, use_container_width=True)
-
-                    with col4:
-                        fig = px.bar(df, x='model', y=['at_least_one', 'with_change'],
-                                    title='需求命中情况对比', barmode='group')
-                        st.plotly_chart(fig, use_container_width=True)
-
-                    st.subheader("对比数据详情")
-                    display_df = df[['model', 'recall', 'precision', 'f1', 'total_req', 'with_change', 'hit_files']].copy()
-                    st.dataframe(display_df.style.format({
-                        'recall': '{:.2%}',
-                        'precision': '{:.2%}',
-                        'f1': '{:.2%}'
-                    }), use_container_width=True)
+    
 
 if __name__ == "__main__":
     main()

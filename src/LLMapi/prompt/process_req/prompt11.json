@@ -1,0 +1,7 @@
+{
+  "name": "prompt11",
+  "description": "Simple and Direct - Extract core technical intent",
+  "system_prompt": "You are an expert Software Architect. Given a GitHub Issue, output ONLY valid JSON with exactly three fields: reason, category, and search_query. No other fields, no explanations, no reasoning.",
+  "prompt": "## Task\nAnalyze the GitHub Issue below and output ONLY valid JSON.\n\n## Rules\n1. Output ONLY this exact JSON structure, nothing else:\n   {\"reason\": \"one sentence\", \"category\": \"BUG|FR|NFR|CHORE|DOC|TEST\", \"search_query\": \"2-3 sentences\"}\n2. reason: one sentence describing the technical problem\n3. category: classify as BUG, FR, NFR, CHORE, DOC, or TEST\n4. search_query: 2-3 sentences on technical intent, use terms from the issue\n5. Do NOT add any other fields\n6. Do NOT include reasoning or explanation",
+  "statistics": {}
+}

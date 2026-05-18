@@ -80,6 +80,11 @@ class TraceLinkResultAnalyzer:
             'CD': 0,
             'MD': 0,
             'IMC': 0,
+            'CC': 0,
+            'IC': 0,
+            'ID': 0,
+            'IMCC': 0,
+            'IMDCC': 0,
             'other': 0
         }
 
@@ -90,30 +95,26 @@ class TraceLinkResultAnalyzer:
             snippet_counts['total_snippets'] += len(snippet_types)
 
             for st in snippet_types:
-                if st.endswith('_CO') or st == 'class_CO':
-                    snippet_counts['CO'] += 1
-                elif st.endswith('_MO') or st == 'class_MO':
-                    snippet_counts['MO'] += 1
-                elif st == 'method_IMO':
-                    snippet_counts['IMO'] += 1
-                elif st == 'method_MCC':
-                    snippet_counts['MCC'] += 1
-                elif st == 'method_MDCC':
-                    snippet_counts['MDCC'] += 1
-                elif st == 'method_MC':
-                    snippet_counts['MC'] += 1
-                elif st == 'method_IMD':
-                    snippet_counts['IMD'] += 1
-                elif st == 'interface_IO' or st == 'class_IO':
-                    snippet_counts['IO'] += 1
+                if st.startswith('class_'):
+                    snippet_type = st.split('_')[1]
+                    if snippet_type in snippet_counts:
+                        snippet_counts[snippet_type] += 1
+                    else:
+                        snippet_counts['other'] += 1
+                elif st.startswith('method_'):
+                    snippet_type = st.split('_')[1]
+                    if snippet_type in snippet_counts:
+                        snippet_counts[snippet_type] += 1
+                    else:
+                        snippet_counts['other'] += 1
+                elif st.startswith('interface_'):
+                    snippet_type = st.split('_')[1]
+                    if snippet_type in snippet_counts:
+                        snippet_counts[snippet_type] += 1
+                    else:
+                        snippet_counts['other'] += 1
                 elif st == 'code_FC':
                     snippet_counts['FC'] += 1
-                elif st == 'class_CD':
-                    snippet_counts['CD'] += 1
-                elif st == 'method_MD':
-                    snippet_counts['MD'] += 1
-                elif st == 'method_IMC':
-                    snippet_counts['IMC'] += 1
                 else:
                     snippet_counts['other'] += 1
         except Exception as e:
@@ -296,6 +297,7 @@ class TraceLinkResultAnalyzer:
                         'average_recall': stats.get('average_recall', 0.0),
                         'average_precision': stats.get('average_precision', 0.0),
                         'average_f1': stats.get('average_f1', 0.0),
+                        'map': stats.get('map', 0.0),
                         'hit_rate': hit_rate
                     })
             else:
@@ -324,6 +326,7 @@ class TraceLinkResultAnalyzer:
                         'average_recall': stats.get('average_recall', 0.0),
                         'average_precision': stats.get('average_precision', 0.0),
                         'average_f1': stats.get('average_f1', 0.0),
+                        'map': stats.get('map', 0.0),
                         'hit_rate': hit_rate
                     })
 
@@ -343,6 +346,7 @@ class TraceLinkResultAnalyzer:
             avg_avg_recall = sum(s['average_recall'] for s in stat_list) / len(stat_list)
             avg_avg_precision = sum(s['average_precision'] for s in stat_list) / len(stat_list)
             avg_avg_f1 = sum(s['average_f1'] for s in stat_list) / len(stat_list)
+            avg_map = sum(s.get('map', 0) for s in stat_list) / len(stat_list)
             avg_hit_rate = sum(s['hit_rate'] for s in stat_list) / len(stat_list)
             results.append({
                 'top_k': top_k,
@@ -352,6 +356,7 @@ class TraceLinkResultAnalyzer:
                 'average_recall': round(avg_avg_recall, 4),
                 'average_precision': round(avg_avg_precision, 4),
                 'average_f1': round(avg_avg_f1, 4),
+                'map': round(avg_map, 4),
                 'hit_rate': round(avg_hit_rate, 4),
                 'count': len(stat_list)
             })
@@ -374,6 +379,7 @@ class TraceLinkResultAnalyzer:
             avg_avg_recall = sum(s['average_recall'] for s in stat_list) / len(stat_list)
             avg_avg_precision = sum(s['average_precision'] for s in stat_list) / len(stat_list)
             avg_avg_f1 = sum(s['average_f1'] for s in stat_list) / len(stat_list)
+            avg_map = sum(s.get('map', 0) for s in stat_list) / len(stat_list)
             avg_hit_rate = sum(s['hit_rate'] for s in stat_list) / len(stat_list)
             results.append({
                 'encoder': encoder,
@@ -385,6 +391,7 @@ class TraceLinkResultAnalyzer:
                 'average_recall': round(avg_avg_recall, 4),
                 'average_precision': round(avg_avg_precision, 4),
                 'average_f1': round(avg_avg_f1, 4),
+                'map': round(avg_map, 4),
                 'hit_rate': round(avg_hit_rate, 4),
                 'count': len(stat_list)
             })
@@ -430,6 +437,7 @@ class TraceLinkResultAnalyzer:
             avg_recall = sum(s['overall_recall'] for s in stat_list) / len(stat_list)
             avg_precision = sum(s['overall_precision'] for s in stat_list) / len(stat_list)
             avg_f1 = sum(s['overall_f1'] for s in stat_list) / len(stat_list)
+            avg_map = sum(s.get('map', 0) for s in stat_list) / len(stat_list)
             parts = key.rsplit('_', 1)
             prompt_name = parts[0] if len(parts) > 0 else key
             prefix_title = parts[1] if len(parts) > 1 else 'NO'
@@ -439,6 +447,7 @@ class TraceLinkResultAnalyzer:
                 'overall_recall': round(avg_recall, 4),
                 'overall_precision': round(avg_precision, 4),
                 'overall_f1': round(avg_f1, 4),
+                'map': round(avg_map, 4),
                 'count': len(stat_list)
             })
 
@@ -454,19 +463,24 @@ class TraceLinkResultAnalyzer:
             return
         print(f"\n总片段数: {stats.get('total_snippets', 0):,}")
         print("\n各类片段数量:")
-        print(f"  CO (类代码片段):     {stats.get('CO', 0):>8,}")
-        print(f"  MO (方法代码片段):   {stats.get('MO', 0):>8,}")
-        print(f"  IMO (接口方法片段):  {stats.get('IMO', 0):>8,}")
-        print(f"  MCC (方法类上下文):  {stats.get('MCC', 0):>8,}")
+        print(f"  CO (类代码片段):         {stats.get('CO', 0):>8,}")
+        print(f"  MO (方法代码片段):       {stats.get('MO', 0):>8,}")
+        print(f"  IMO (接口方法片段):      {stats.get('IMO', 0):>8,}")
+        print(f"  MCC (方法类上下文):      {stats.get('MCC', 0):>8,}")
         print(f"  MDCC (方法注释类上下文): {stats.get('MDCC', 0):>8,}")
-        print(f"  MC (方法注释):       {stats.get('MC', 0):>8,}")
-        print(f"  IMD (接口方法注释):  {stats.get('IMD', 0):>8,}")
-        print(f"  IO (接口片段):       {stats.get('IO', 0):>8,}")
-        print(f"  FC (文件代码片段):   {stats.get('FC', 0):>8,}")
-        print(f"  CD (类注释片段):     {stats.get('CD', 0):>8,}")
-        print(f"  MD (方法注释):       {stats.get('MD', 0):>8,}")
-        print(f"  IMC (接口方法注释):  {stats.get('IMC', 0):>8,}")
-        print(f"  other:               {stats.get('other', 0):>8,}")
+        print(f"  MC (方法注释):           {stats.get('MC', 0):>8,}")
+        print(f"  IMD (接口方法注释):      {stats.get('IMD', 0):>8,}")
+        print(f"  IO (接口片段):           {stats.get('IO', 0):>8,}")
+        print(f"  FC (文件代码片段):       {stats.get('FC', 0):>8,}")
+        print(f"  CD (类注释片段):         {stats.get('CD', 0):>8,}")
+        print(f"  MD (方法注释):           {stats.get('MD', 0):>8,}")
+        print(f"  IMC (接口方法注释):      {stats.get('IMC', 0):>8,}")
+        print(f"  CC (类注释):             {stats.get('CC', 0):>8,}")
+        print(f"  IC (接口注释):           {stats.get('IC', 0):>8,}")
+        print(f"  ID (接口带注释):         {stats.get('ID', 0):>8,}")
+        print(f"  IMCC (接口方法类上下文):  {stats.get('IMCC', 0):>8,}")
+        print(f"  IMDCC (接口方法注释类上下文): {stats.get('IMDCC', 0):>8,}")
+        print(f"  other:                   {stats.get('other', 0):>8,}")
         print()
 
     def print_overall_stats(self):
@@ -510,21 +524,21 @@ class TraceLinkResultAnalyzer:
         print("Prompt对比 (Top-10, 按Recall排序)")
         print("=" * 100)
         prompt_comparison = self.compare_prompt_performance(top_k=10)
-        header = f"{'Prompt':>20} | {'PrefixTitle':>12} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Count':>6}"
+        header = f"{'Prompt':>20} | {'PrefixTitle':>12} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'MAP':>8} | {'Count':>6}"
         print(header)
-        print("-" * 75)
+        print("-" * 85)
         for row in prompt_comparison:
-            print(f"{row['prompt_name']:>20} | {row['prefix_title']:>12} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['count']:>6}")
+            print(f"{row['prompt_name']:>20} | {row['prefix_title']:>12} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row.get('map', 0):>8.4f} | {row['count']:>6}")
 
         print("\n" + "=" * 100)
         print("Top-K 性能对比 (各配置平均)")
         print("=" * 100)
         df_topk = self.compare_top_k_performance()
-        header = f"{'Top-K':>6} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Avg Recall':>10} | {'Avg Prec':>10} | {'Avg F1':>8} | {'Hit Rate':>9}"
+        header = f"{'Top-K':>6} | {'Recall':>8} | {'Precision':>10} | {'F1':>8} | {'Avg Recall':>10} | {'Avg Prec':>10} | {'Avg F1':>8} | {'MAP':>8} | {'Hit Rate':>9}"
         print(header)
-        print("-" * 100)
+        print("-" * 115)
         for row in df_topk:
-            print(f"{row['top_k']:>6} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['average_recall']:>10.4f} | {row['average_precision']:>10.4f} | {row['average_f1']:>8.4f} | {row['hit_rate']:>9.4f}")
+            print(f"{row['top_k']:>6} | {row['overall_recall']:>8.4f} | {row['overall_precision']:>10.4f} | {row['overall_f1']:>8.4f} | {row['average_recall']:>10.4f} | {row['average_precision']:>10.4f} | {row['average_f1']:>8.4f} | {row.get('map', 0):>8.4f} | {row['hit_rate']:>9.4f}")
 
         print("\n" + "=" * 100)
         print("编码器+LLM组合对比 (Top-10, 按Recall排序)")
@@ -608,6 +622,11 @@ class TraceLinkResultAnalyzer:
         ws_snippet.append(["CD (类注释片段)", self.code_snippet_stats.get('CD', 0)])
         ws_snippet.append(["MD (方法注释)", self.code_snippet_stats.get('MD', 0)])
         ws_snippet.append(["IMC (接口方法注释)", self.code_snippet_stats.get('IMC', 0)])
+        ws_snippet.append(["CC (类注释)", self.code_snippet_stats.get('CC', 0)])
+        ws_snippet.append(["IC (接口注释)", self.code_snippet_stats.get('IC', 0)])
+        ws_snippet.append(["ID (接口带注释)", self.code_snippet_stats.get('ID', 0)])
+        ws_snippet.append(["IMCC (接口方法类上下文)", self.code_snippet_stats.get('IMCC', 0)])
+        ws_snippet.append(["IMDCC (接口方法注释类上下文)", self.code_snippet_stats.get('IMDCC', 0)])
         ws_snippet.append(["other", self.code_snippet_stats.get('other', 0)])
         ws_snippet.column_dimensions['A'].width = 25
         ws_snippet.column_dimensions['B'].width = 15
@@ -649,7 +668,7 @@ class TraceLinkResultAnalyzer:
         ws_summary.column_dimensions['A'].width = 30
 
         ws_prompt = wb.create_sheet("Prompt对比")
-        headers_prompt = ["Prompt", "PrefixTitle", "Recall", "Precision", "F1", "数量"]
+        headers_prompt = ["Prompt", "PrefixTitle", "Recall", "Precision", "F1", "MAP", "数量"]
         ws_prompt.append(headers_prompt)
         for col in range(1, len(headers_prompt) + 1):
             cell = ws_prompt.cell(row=1, column=col)
@@ -663,13 +682,14 @@ class TraceLinkResultAnalyzer:
                 f"{row['overall_recall']:.2%}",
                 f"{row['overall_precision']:.2%}",
                 f"{row['overall_f1']:.2%}",
+                f"{row.get('map', 0):.2%}",
                 row['count']
             ])
         ws_prompt.column_dimensions['A'].width = 20
         ws_prompt.column_dimensions['B'].width = 12
 
         ws_topk = wb.create_sheet("Top-K汇总")
-        headers_topk = ["Top-K", "Recall", "Precision", "F1", "Avg Recall", "Avg Prec", "Avg F1", "Hit Rate", "Count"]
+        headers_topk = ["Top-K", "Recall", "Precision", "F1", "Avg Recall", "Avg Prec", "Avg F1", "MAP", "Hit Rate", "Count"]
         ws_topk.append(headers_topk)
         for col in range(1, len(headers_topk) + 1):
             cell = ws_topk.cell(row=1, column=col)
@@ -685,16 +705,54 @@ class TraceLinkResultAnalyzer:
                 f"{row['average_recall']:.2%}",
                 f"{row['average_precision']:.2%}",
                 f"{row['average_f1']:.2%}",
+                f"{row.get('map', 0):.2%}",
                 f"{row['hit_rate']:.2%}",
                 row['count']
             ])
         ws_topk.column_dimensions['A'].width = 8
 
+        ws_map = wb.create_sheet("MAP排序详情")
+        top5_stats = [s for s in all_stats if s['top_k'] == 5]
+        df_sorted = sorted(top5_stats, key=lambda x: x.get('map', 0), reverse=True)
+        headers_map = ["Encoder", "Snippet Types", "UseLLM", "PromptName", "Recall", "Precision", "F1", "Avg Recall", "Avg Prec", "Avg F1", "MAP", "Hit Rate",
+                      "总需求", "有变更", "至少命中", "变更文件", "预测文件", "命中", "FP"]
+        ws_map.append(headers_map)
+        for col in range(1, len(headers_map) + 1):
+            cell = ws_map.cell(row=1, column=col)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        for row in df_sorted:
+            ws_map.append([
+                row['encoder'],
+                row['snippet_types_str'],
+                row['use_llm'],
+                row.get('prompt_name', ''),
+                f"{row['overall_recall']:.2%}",
+                f"{row['overall_precision']:.2%}",
+                f"{row['overall_f1']:.2%}",
+                f"{row['average_recall']:.2%}",
+                f"{row['average_precision']:.2%}",
+                f"{row['average_f1']:.2%}",
+                f"{row.get('map', 0):.2%}",
+                f"{row['hit_rate']:.2%}",
+                row['total_requirements'],
+                row['requirements_with_change_files'],
+                row['requirements_with_at_least_one_hit'],
+                row['total_change_files'],
+                row['total_predicted_files'],
+                row['total_hit_files'],
+                row['total_fp_files']
+            ])
+        ws_map.column_dimensions['A'].width = 8
+        ws_map.column_dimensions['B'].width = 12
+        ws_map.column_dimensions['C'].width = 25
+
         for top_k in sorted(set(s['top_k'] for s in all_stats)):
             df_k = [s for s in all_stats if s['top_k'] == top_k]
-            df_k.sort(key=lambda x: x['overall_f1'], reverse=True)
+            df_k.sort(key=lambda x: x['average_recall'], reverse=True)
             ws = wb.create_sheet(f"Top{top_k}详情")
-            headers = ["Encoder", "Snippet Types", "UseLLM", "PromptName", "PrefixTitle", "Temperature", "Recall", "Precision", "F1", "Avg F1", "Hit Rate",
+            headers = ["Encoder", "Snippet Types", "UseLLM", "PromptName", "PrefixTitle", "Temperature", "Recall", "Precision", "F1", "Avg Recall", "Avg Prec", "Avg F1", "MAP", "Hit Rate",
                       "总需求", "有变更", "至少命中", "变更文件", "预测文件", "命中", "FP"]
             ws.append(headers)
             for col in range(1, len(headers) + 1):
@@ -713,7 +771,10 @@ class TraceLinkResultAnalyzer:
                     f"{row['overall_recall']:.2%}",
                     f"{row['overall_precision']:.2%}",
                     f"{row['overall_f1']:.2%}",
+                    f"{row['average_recall']:.2%}",
+                    f"{row['average_precision']:.2%}",
                     f"{row['average_f1']:.2%}",
+                    f"{row.get('map', 0):.2%}",
                     f"{row['hit_rate']:.2%}",
                     row['total_requirements'],
                     row['requirements_with_change_files'],

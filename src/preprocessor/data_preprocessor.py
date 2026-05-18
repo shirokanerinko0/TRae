@@ -59,37 +59,22 @@ class DataPreprocessor:
         self.stop_words = set(stopwords.words('english'))
     
     def preprocess_text(self, text):
-        """
-        预处理文本，包括去噪、停用词过滤和格式统一
-        :param text: 原始文本
-        :return: 预处理后的文本
-        """
         if not text:
             return ""
-        
-        # 1. 去除特殊符号和链接
-        # 去除链接
-        text = re.sub(r'http\S+', '', text)
-        text = re.sub(r'https\S+', '', text)
 
-        
-        # 2. 转换为小写
+        # 1. 去除URL
+        text = re.sub(r'https?://\S+|www\.\S+', ' ', text)
+
+        # 2. 去除HTML标签
+        text = re.sub(r'<.*?>', ' ', text)
+
+        # 3. 转小写
         text = text.lower()
-        
-        # 3. 分词
-        try:
-            tokens = word_tokenize(text)
-        except Exception as e:
-            print(f"分词失败: {str(e)}")
-            return ""
-        
-        # 4. 过滤停用词
-        filtered_tokens = [token for token in tokens if token not in self.stop_words]
-        
-        # 5. 格式统一，合并为空格分隔的字符串
-        processed_text = ' '.join(filtered_tokens)
-        
-        return processed_text
+
+        # 4. 统一空白
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text
     
     def get_tokens(self, text):
         """
@@ -169,7 +154,9 @@ class DataPreprocessor:
                         processed_req["search_query"] = full_text
                         processed_req["type"] = "default"
         else:
-            processed_req["search_query"] =  description
+            if CONFIG["requirement_processing"].get("preprocess", True):# 对原始body预处理
+                description = self.preprocess_text(description)
+                processed_req["search_query"] =  description
             processed_req["type"] = "default"
 
         return processed_req
